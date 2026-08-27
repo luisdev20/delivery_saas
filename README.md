@@ -1,36 +1,65 @@
 # Delivery Tracker SaaS
 
-Plataforma B2B para restaurantes y negocios gastronómicos que permite gestionar pedidos, monitorear la cocina (KDS), administrar la flota de repartidores y ofrecer seguimiento GPS en tiempo real a los clientes finales.
+Plataforma B2B para restaurantes y negocios gastronómicos que permite gestionar pedidos, monitorear la cocina en tiempo real (KDS), administrar la flota de repartidores y ofrecer seguimiento GPS en vivo a los clientes finales.
 
 ---
 
-## Tabla de Contenidos
+## Guía Rápida de Inicio para el Equipo
 
-1. [Stack Tecnológico](#stack-tecnológico)
-2. [Estructura del Repositorio](#estructura-del-repositorio)
-3. [Requisitos Previos](#requisitos-previos)
-4. [Guía de Instalación Paso a Paso](#guía-de-instalación-paso-a-paso)
-   - [Paso 1: Clonar el repositorio e instalar dependencias](#paso-1-clonar-el-repositorio-e-instalar-dependencias)
-   - [Paso 2: Configuración de la Base de Datos (Supabase)](#paso-2-configuración-de-la-base-de-datos-supabase)
-   - [Paso 3: Variables de Entorno](#paso-3-variables-de-entorno)
-   - [Paso 4: Ejecución en Desarrollo](#paso-4-ejecución-en-desarrollo)
-5. [Rutas de la Aplicación](#rutas-de-la-aplicación)
-6. [Flujo Operativo del Sistema](#flujo-operativo-del-sistema)
-7. [Fases del Proyecto](#fases-del-proyecto)
-8. [Reglas de Código y Contribución](#reglas-de-código-y-contribución)
+Sigue estos 3 pasos para levantar el proyecto en tu máquina local conectado a la base de datos compartida de desarrollo:
 
----
+### 1. Clonar el repositorio e instalar dependencias
 
-## Stack Tecnológico
+Abre tu terminal y ejecuta:
 
-* **Frontend Web:** Next.js 14/16 (App Router), TypeScript, Tailwind CSS v4, Lucide Icons.
-* **Mapas y Geolocalización:** Leaflet, OpenStreetMap.
-* **Backend y Base de Datos:** Supabase (PostgreSQL, Supabase Auth, Supabase Realtime).
-* **App Móvil (Fase 2):** Flutter (Android First).
+```bash
+git clone https://github.com/luisdev20/delivery_saas.git
+cd delivery_saas
+npm install
+```
 
 ---
 
-## Estructura del Repositorio
+### 2. Configurar Variables de Entorno
+
+El proyecto ya cuenta con una base de datos centralizada en Supabase con todas las tablas, usuarios y productos de prueba configurados.
+
+1. **Solicita el archivo `.env.local` al líder del proyecto.**
+2. Crea el archivo en la ruta `apps/web/.env.local` y pega las credenciales:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-clave-anon
+```
+
+*(Nota: el archivo `.env.local` está protegido en `.gitignore` para no exponer claves en el repositorio).*
+
+---
+
+### 3. Ejecutar el Proyecto
+
+Inicia el servidor de desarrollo:
+
+```bash
+npm run dev
+```
+
+La aplicación estará corriendo en **`http://localhost:3000`**.
+
+---
+
+## Rutas Principales de Prueba
+
+| Ruta | Descripción | Acceso |
+|---|---|:---:|
+| **`/login`** | Portal de acceso para administradores del restaurante. | Público (solicitar credenciales al líder) |
+| **`/admin`** | Panel de control unificado: Despachos, Gestión de Flota, Cocina KDS y Menú. | Protegido (requiere login) |
+| **`/p/el-rincon-criollo`** | Tienda pública del restaurante de prueba para armar pedidos y checkout. | Público |
+| **`/tracking/[orderId]`** | Pantalla de seguimiento en vivo con mapa interactivo y estados en tiempo real. | Público |
+
+---
+
+## Estructura del Monorepo
 
 ```text
 delivery_SaaS/
@@ -39,157 +68,49 @@ delivery_SaaS/
 │   │   ├── src/
 │   │   │   ├── app/
 │   │   │   │   ├── admin/       # Panel de administración (Despacho, Flota, KDS, Menú)
-│   │   │   │   ├── login/       # Acceso B2B
-│   │   │   │   ├── p/[slug]/    # Menú público del restaurante y checkout
-│   │   │   │   └── tracking/    # Pantalla de seguimiento en tiempo real
-│   │   │   └── lib/supabase/    # Clientes de Supabase y definiciones de tipos
+│   │   │   │   ├── login/       # Portal de acceso
+│   │   │   │   ├── p/[slug]/    # Menú público y checkout
+│   │   │   │   └── tracking/    # Pantalla de rastreo en vivo
+│   │   │   └── lib/supabase/    # Clientes y tipos de base de datos
 │   │   └── package.json
 │   └── mobile_driver/           # App móvil Flutter para repartidores (Fase 2)
 ├── supabase/
-│   └── migrations/              # Scripts SQL de esquema y tablas
-│       ├── 001_initial_schema.sql
-│       └── 002_add_cover_image.sql
-├── ideas_de_prototipos/         # Prototipos interactivos de referencia UX/UI
-├── package.json                 # Configuración del monorepo
+│   └── migrations/              # Scripts SQL del esquema de base de datos
+├── ideas_de_prototipos/         # Prototipos interactivos de referencia UI/UX
+├── package.json
 └── README.md
 ```
-
----
-
-## Requisitos Previos
-
-Antes de comenzar, asegúrate de contar con:
-
-1. **Node.js:** Versión 18.18 o superior (recomendado Node 20 LTS o Node 22).
-2. **Gestor de paquetes:** `npm` (incluido con Node.js).
-3. **Cuenta de Supabase:** Para crear la base de datos PostgreSQL y el servicio de autenticación.
-
----
-
-## Guía de Instalación Paso a Paso
-
-### Paso 1: Clonar el repositorio e instalar dependencias
-
-1. Abre tu terminal y clona el proyecto:
-   ```bash
-   git clone https://github.com/luisdev20/delivery_saas.git delivery_SaaS
-   cd delivery_SaaS
-   ```
-
-2. Instala las dependencias del proyecto:
-   ```bash
-   npm install
-   ```
-
----
-
-### Paso 2: Configuración de la Base de Datos (Supabase)
-
-1. Ingresa a tu panel de control en [Supabase](https://supabase.com) y crea un nuevo proyecto.
-2. Ve a la sección **SQL Editor** (icono de terminal en el menú lateral izquierdo).
-3. Ejecuta en orden los scripts ubicados en la carpeta `supabase/migrations/`:
-   * Copia y ejecuta el contenido de [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql).
-   * Copia y ejecuta el contenido de [`supabase/migrations/002_add_cover_image.sql`](supabase/migrations/002_add_cover_image.sql).
-4. **Habilitar Realtime:**
-   * En Supabase, ve a **Database** -> **Replication**.
-   * Asegúrate de que las tablas `orders` y `driver_locations` tengan habilitada la replicación para soportar actualizaciones en vivo.
-5. **Crear Usuario Administrador:**
-   * Ve a **Authentication** -> **Users** y haz clic en **Add User** -> **Create User**.
-   * Ingresa el correo y contraseña del administrador (ejemplo: `admin@restaurante.com`).
-
----
-
-### Paso 3: Variables de Entorno
-
-1. En la carpeta `apps/web/`, crea un archivo llamado `.env.local` (puedes tomar como referencia el archivo `.env.example` en la raíz):
-
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-clave-anon-publica
-   ```
-
-2. Puedes obtener estos valores en tu panel de Supabase en **Project Settings** -> **API**.
-
----
-
-### Paso 4: Ejecución en Desarrollo
-
-Para iniciar el servidor de desarrollo de la aplicación web:
-
-```bash
-# Desde la raíz del proyecto
-npm run dev
-
-# O directamente desde la carpeta apps/web
-cd apps/web
-npm run dev
-```
-
-La aplicación estará disponible en `http://localhost:3000`.
-
----
-
-## Rutas de la Aplicación
-
-| Ruta | Descripción | Acceso |
-|---|---|:---:|
-| `/login` | Portal de acceso para administradores del restaurante. | Público |
-| `/admin` | Panel de control unificado (Despachos, Flota, Cocina KDS, Menú). | Protegido (Requiere Login) |
-| `/p/[slug]` | Tienda pública del restaurante para clientes (ej. `/p/el-rincon-criollo`). | Público |
-| `/tracking/[orderId]` | Pantalla de seguimiento en tiempo real con mapa interactivo y estado del pedido. | Público |
 
 ---
 
 ## Flujo Operativo del Sistema
 
 ```text
-[Cliente] Realiza pedido en /p/[slug]
+1. [Cliente] Realiza pedido en /p/[slug] con dirección o GPS y método de pago
    │
    ▼
-[Supabase] Registra orden con estado "RECIBIDO"
+2. [Supabase Realtime] Registra orden en estado "RECIBIDO"
    │
-   ├──► [KDS / Cocina] Recibe notificación en tiempo real -> Pasa a "EN_PREPARACION" -> Pasa a "LISTO"
+   ├──► [KDS / Cocina] Visualiza la orden -> Pasa a "EN_PREPARACION" -> Pasa a "LISTO"
    │
    ├──► [Admin / Despacho] Asigna repartidor desde /admin
    │
-   └──► [Repartidor / App] Acepta orden, inicia viaje ("EN_CAMINO") y actualiza GPS
+   └──► [Repartidor / App Móvil] Inicia viaje ("EN_CAMINO") transmitiendo coordenadas GPS
            │
            ▼
-   [Cliente / Tracking] Visualiza al repartidor en movimiento en /tracking/[orderId]
-           │
-           ▼
-   [Entrega] Repartidor valida entrega ("ENTREGADO")
+3. [Cliente / Tracking] Visualiza al repartidor en movimiento en /tracking/[orderId]
+   │
+   ▼
+4. [Entrega] Repartidor valida entrega ("ENTREGADO")
 ```
 
 ---
 
-## Fases del Proyecto
-
-* **Fase 1: MVP Core (Web + Backend + Rediseño UI)** &mdash; **Completada**
-  * Base de datos PostgreSQL, Auth y Realtime en Supabase.
-  * Portal de login B2B con identidad visual indigo.
-  * Panel de administración unificado (Despacho, Flota, KDS, Menú).
-  * Tienda pública y checkout con geolocalización GPS.
-  * Seguimiento en vivo con Leaflet.
-* **Fase 2: App Móvil del Repartidor (Flutter / Android First)** &mdash; **En Progreso**
-  * Aplicación móvil nativa en `apps/mobile_driver`.
-  * Bolsa de trabajo de pedidos y aceptación en ruta.
-  * Transmisión GPS periódica en segundo plano.
-  * Validación de entrega mediante código PIN de seguridad.
-* **Fase 3: Multi-tenancy B2B y Facturación** &mdash; **Pendiente**
-  * Políticas de seguridad RLS avanzadas.
-  * Límites por suscripción (`STARTER`, `GROWTH`, `ENTERPRISE`).
-* **Fase 4: Automatizaciones y Notificaciones** &mdash; **Pendiente**
-  * Disparos automáticos vía WhatsApp con link de seguimiento.
-  * Notificaciones Push para cocina y repartidores.
-
----
-
-## Reglas de Código y Contribución
+## Reglas de Desarrollo y Contribución
 
 1. **Sin emoticonos:** No utilizar emojis en nombres de variables, mensajes de commit, logs o documentación.
-2. **Comentarios concisos:** Mantener los comentarios en código breves y únicamente cuando aporten claridad técnica necesaria.
-3. **Verificación de build:** Antes de enviar cambios, validar que no existan errores de compilación ejecutando:
+2. **Comentarios concisos:** Mantener comentarios breves y únicamente cuando aporten valor técnico.
+3. **Verificación de build:** Antes de hacer commit o push, verifica que compile sin errores:
    ```bash
    cd apps/web && npm run build
    ```
