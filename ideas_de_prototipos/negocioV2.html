@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sabores Milenarios | SaaS Mock</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@300;500;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'], oswald: ['Oswald', 'sans-serif'] },
+          colors: { brand: { 500: '#960000', 600: '#780000' }, accent: { gold: '#F2AE24' } },
+          animation: { 'bounce-short': 'bounce 0.5s ease-in-out 2' }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased overflow-x-hidden flex flex-col min-h-screen">
+
+  <!-- ================= HEADER SIMPLIFICADO ================= -->
+  <header class="bg-white sticky top-0 z-40 border-b border-gray-200 shadow-sm">
+    <div class="max-w-[1400px] mx-auto px-4 h-[75px] flex items-center justify-between">
+      
+      <!-- Logo -->
+      <a href="#" onclick="showView('home')" class="w-[50px] h-[50px] rounded-full border-[3px] border-black flex flex-col items-center justify-center relative bg-white group hover:border-brand-500 transition-colors">
+        <span class="font-oswald font-bold text-xl leading-none -mt-1 text-black tracking-tighter group-hover:text-brand-500 transition-colors">SM</span>
+        <svg class="absolute w-[56px] h-[56px] border border-black rounded-full p-1 group-hover:border-brand-500 transition-colors" style="border-style: dashed;"></svg>
+      </a>
+
+      <!-- Controles (Carrito y Login) -->
+      <div class="flex items-center gap-5">
+        <button id="openCartBtn" class="flex items-center gap-2 cursor-pointer group relative">
+          <i data-lucide="shopping-bag" class="w-[20px] h-[20px] text-brand-500 group-hover:scale-110 transition-transform"></i>
+          <span class="text-[13px] font-bold uppercase tracking-wider group-hover:text-brand-500 transition-colors hidden sm:block">Mi Pedido</span>
+          <span id="cart-count" class="absolute -top-1.5 -left-1.5 bg-accent-gold text-black text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full transition-transform">0</span>
+        </button>
+
+        <button id="openLoginBtn" class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-[9px] rounded-md flex items-center gap-2 transition-colors shadow-sm">
+          <i data-lucide="user" class="w-[15px] h-[15px] fill-current"></i>
+          <span id="loginBtnText" class="text-[13px] font-bold uppercase tracking-wider">Ingresar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow relative">
+    
+    <!-- ================= VISTA 1: HOME (HERO + CATEGORÍAS) ================= -->
+    <div id="view-home" class="block transition-opacity duration-300">
+      <section class="relative w-full h-[350px] md:h-[450px] bg-slate-900 flex items-center group">
+        <img src="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1920&q=80" alt="Lomo Saltado" class="absolute inset-0 w-full h-full object-cover opacity-60">
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-black/40 to-black/80"></div>
+        <div class="relative max-w-[1400px] w-full mx-auto px-8 md:px-16 flex justify-end">
+          <div class="text-right flex flex-col items-end">
+            <h3 class="text-brand-500 text-xl md:text-3xl font-oswald tracking-[0.2em] uppercase mb-1">Especialidad</h3>
+            <h2 class="text-white text-5xl md:text-[5rem] lg:text-[6rem] font-oswald font-bold uppercase leading-[0.9] mb-6 drop-shadow-lg">
+              LOMO<br>SALTADO<br>CRIOLLO
+            </h2>
+          </div>
+        </div>
+      </section>
+
+      <section class="max-w-[1400px] mx-auto px-4 lg:px-12 py-10 pb-16">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+          <a href="#" onclick="showView('category', 'Promociones')" class="relative h-[250px] sm:h-[300px] rounded-[1.25rem] overflow-hidden group">
+            <img src="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+            <h3 class="absolute bottom-6 left-6 text-white text-[22px] font-bold uppercase tracking-wide">Promociones</h3>
+          </a>
+          <a href="#" onclick="showView('category', 'Platos Criollos')" class="relative h-[250px] sm:h-[300px] rounded-[1.25rem] overflow-hidden group">
+            <img src="https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+            <h3 class="absolute bottom-6 left-6 text-white text-[22px] font-bold uppercase tracking-wide">Platos Criollos</h3>
+          </a>
+          <a href="#" onclick="showView('category', 'Sopas y Entradas')" class="relative h-[250px] sm:h-[300px] rounded-[1.25rem] overflow-hidden group">
+            <img src="https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+            <h3 class="absolute bottom-6 left-6 text-white text-[22px] font-bold uppercase tracking-wide">Sopas y Entradas</h3>
+          </a>
+          <a href="#" onclick="showView('category', 'Bebidas')" class="relative h-[250px] sm:h-[300px] rounded-[1.25rem] overflow-hidden group">
+            <img src="https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+            <h3 class="absolute bottom-6 left-6 text-white text-[22px] font-bold uppercase tracking-wide">Bebidas</h3>
+          </a>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= VISTA 2: LISTADO DE CATEGORÍA ================= -->
+    <div id="view-category" class="hidden transition-opacity duration-300 max-w-[1400px] mx-auto px-4 lg:px-12 py-8">
+      
+      <button onclick="showView('home')" class="flex items-center gap-2 text-gray-500 hover:text-brand-500 transition-colors mb-6 text-sm font-medium">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al inicio
+      </button>
+
+      <h2 id="category-title" class="font-oswald text-4xl text-center text-gray-900 font-bold uppercase tracking-wider mb-10">CATEGORÍA</h2>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        
+        <!-- Tarjeta replicando estilo Pardos -->
+        <div class="bg-white rounded-[1.25rem] p-4 border border-gray-100 shadow-sm hover:shadow-lg transition-shadow flex flex-col h-full">
+          <div class="rounded-xl overflow-hidden mb-4 h-48 bg-gray-100">
+            <img src="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80" alt="Plato" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+          </div>
+          <h4 class="font-bold text-[17px] text-gray-900 leading-tight mb-1">Lomo Saltado Criollo</h4>
+          <p class="text-[12px] text-gray-500 mb-4 flex-grow line-clamp-2">Lomo fino de res flameado al wok con cebolla, tomate y papas fritas amarillas.</p>
+          <div class="flex items-end justify-between mt-auto">
+            <span class="text-xl font-black text-gray-900">S/ 35.90</span>
+            <button onclick="agregarAlCarrito('Lomo Saltado Criollo', 35.90)" class="bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="shopping-basket" class="w-4 h-4"></i> Agregar
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-[1.25rem] p-4 border border-gray-100 shadow-sm hover:shadow-lg transition-shadow flex flex-col h-full">
+          <div class="rounded-xl overflow-hidden mb-4 h-48 bg-gray-100">
+            <img src="https://images.unsplash.com/photo-1534604973900-c43355331507?auto=format&fit=crop&w=600&q=80" alt="Plato" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+          </div>
+          <h4 class="font-bold text-[17px] text-gray-900 leading-tight mb-1">Ceviche Clásico</h4>
+          <p class="text-[12px] text-gray-500 mb-4 flex-grow line-clamp-2">Pescado fresco marinado en limón, ají limo, con camote y choclo.</p>
+          <div class="flex items-end justify-between mt-auto">
+            <span class="text-xl font-black text-gray-900">S/ 38.00</span>
+            <button onclick="agregarAlCarrito('Ceviche Clásico', 38.00)" class="bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="shopping-basket" class="w-4 h-4"></i> Agregar
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-[1.25rem] p-4 border border-gray-100 shadow-sm hover:shadow-lg transition-shadow flex flex-col h-full">
+          <div class="rounded-xl overflow-hidden mb-4 h-48 bg-gray-100">
+            <img src="https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=600&q=80" alt="Plato" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+          </div>
+          <h4 class="font-bold text-[17px] text-gray-900 leading-tight mb-1">Causa Limeña rellena</h4>
+          <p class="text-[12px] text-gray-500 mb-4 flex-grow line-clamp-2">Suave masa de papa amarilla con ají, rellena de pollo deshilachado.</p>
+          <div class="flex items-end justify-between mt-auto">
+            <span class="text-xl font-black text-gray-900">S/ 22.50</span>
+            <button onclick="agregarAlCarrito('Causa Limeña', 22.50)" class="bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="shopping-basket" class="w-4 h-4"></i> Agregar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="bg-[#1a1a1a] text-gray-300 pt-10 pb-6 border-t-[6px] border-brand-500 mt-auto">
+    <div class="max-w-[1400px] mx-auto px-4 lg:px-12 flex justify-between items-center text-[12px] text-gray-500">
+      <p>&copy; 2026 Restaurante Sabores Milenarios. Todos los derechos reservados.</p>
+      <p>Integrado con SaaS Delivery Tracker V1.0</p>
+    </div>
+  </footer>
+
+  <!-- ================= MODALES Y CAJÓN LATERAL ================= -->
+  
+  <!-- Carrito Drawer -->
+  <div id="cartOverlay" class="fixed inset-0 bg-black/50 z-[60] hidden transition-opacity opacity-0"></div>
+  <div id="cartPanel" class="fixed top-0 right-0 w-full sm:w-[400px] h-screen bg-white shadow-2xl z-[70] translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="bg-brand-500 text-white p-5 flex justify-between items-center">
+      <h2 class="font-oswald text-xl uppercase tracking-wider">Tu Pedido</h2>
+      <button id="closeCartBtn" class="text-white hover:text-gray-200"><i data-lucide="x" class="w-6 h-6"></i></button>
+    </div>
+    <div id="cartItemsContainer" class="flex-1 p-5 overflow-y-auto space-y-4"></div>
+    <div class="p-5 bg-gray-50 border-t-2 border-accent-gold">
+      <div class="flex justify-between text-lg font-black text-brand-500 mb-5">
+        <span>Subtotal:</span>
+        <span id="cart-subtotal">S/ 0.00</span>
+      </div>
+      <button id="openPaymentBtn" disabled class="w-full bg-green-700 hover:bg-green-800 disabled:bg-gray-400 text-white py-3 rounded-md font-bold uppercase tracking-wide transition-colors">
+        Continuar al Pago
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal Checkout / Pago -->
+  <div id="paymentModal" class="fixed inset-0 bg-black/60 z-[80] hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+      <!-- Sticky header modal -->
+      <div class="sticky top-0 bg-white p-6 pb-2 border-b border-gray-100 z-10 flex justify-between items-center">
+        <h2 class="font-oswald text-2xl text-brand-500 uppercase tracking-wide">Finalizar Compra</h2>
+        <button onclick="closeModal('paymentModal')" class="text-gray-400 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      
+      <form id="paymentForm" class="p-6 space-y-6">
+        
+        <!-- SECCIÓN 1: TIPO DE ENTREGA -->
+        <div>
+          <h3 class="font-bold text-sm text-gray-900 mb-3 border-b pb-1">1. Método de Entrega</h3>
+          <div class="flex gap-4">
+            <label class="flex-1 border border-gray-200 rounded p-3 cursor-pointer hover:border-brand-500 flex items-center gap-2">
+              <input type="radio" name="deliveryMethod" value="pickup" checked onchange="toggleMap(false)" class="text-brand-500 focus:ring-brand-500">
+              <span class="text-sm font-medium">Recojo en Tienda</span>
+            </label>
+            <label class="flex-1 border border-gray-200 rounded p-3 cursor-pointer hover:border-brand-500 flex items-center gap-2">
+              <input type="radio" name="deliveryMethod" value="delivery" onchange="toggleMap(true)" class="text-brand-500 focus:ring-brand-500">
+              <span class="text-sm font-medium">Delivery (+ S/5.00)</span>
+            </label>
+          </div>
+          
+          <!-- Contenedor Mapa (Oculto por defecto) -->
+          <div id="mapContainer" class="hidden mt-4 space-y-3">
+            <div class="relative w-full h-32 rounded-lg overflow-hidden border border-gray-300">
+              <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover opacity-80">
+              <div class="absolute inset-0 flex items-center justify-center">
+                <i data-lucide="map-pin" class="w-8 h-8 text-brand-500 drop-shadow-md animate-bounce"></i>
+              </div>
+            </div>
+            <input type="text" placeholder="Ej: Av. Arequipa 1234, Miraflores" class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-500" id="addressInput">
+          </div>
+        </div>
+
+        <!-- SECCIÓN 2: PAGO -->
+        <div>
+          <div class="flex justify-between items-end border-b pb-1 mb-3">
+            <h3 class="font-bold text-sm text-gray-900">2. Datos de Tarjeta</h3>
+            <span class="text-xl font-black text-brand-500" id="modal-total-display">S/ 0.00</span>
+          </div>
+          
+          <div class="space-y-3">
+            <input type="text" placeholder="0000 0000 0000 0000" maxlength="19" required class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-500">
+            <div class="flex gap-3">
+              <input type="text" placeholder="MM/YY" maxlength="5" required class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-500">
+              <input type="password" placeholder="CVV" maxlength="4" required class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" id="paySubmitBtn" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3.5 rounded uppercase tracking-wide transition-colors disabled:bg-gray-400">
+          Confirmar y Pagar
+        </button>
+      </form>
+
+      <!-- Pantalla de Éxito (Oculta) -->
+      <div id="successScreen" class="hidden flex-col items-center justify-center p-8 text-center h-full">
+        <i data-lucide="check-circle" class="w-16 h-16 text-green-600 mb-4"></i>
+        <h2 class="text-2xl font-oswald text-gray-900 mb-2">¡Pago Exitoso!</h2>
+        <p class="text-gray-500 text-sm mb-6">Tu orden ha sido confirmada y enviada a la cocina.</p>
+        
+        <!-- Botón del SaaS -->
+        <button onclick="redirigirSaaS()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded uppercase tracking-wide flex justify-center items-center gap-2">
+          <i data-lucide="map" class="w-5 h-5"></i> Rastrear mi pedido en vivo
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // Lógica SPA (Navegación sin recargar)
+    function showView(viewId, title = '') {
+      const vHome = document.getElementById('view-home');
+      const vCategory = document.getElementById('view-category');
+      
+      if(viewId === 'home') {
+        vCategory.classList.add('hidden');
+        vHome.classList.remove('hidden');
+      } else if (viewId === 'category') {
+        document.getElementById('category-title').innerText = title;
+        vHome.classList.add('hidden');
+        vCategory.classList.remove('hidden');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Carrito
+    const cartOverlay = document.getElementById('cartOverlay');
+    const cartPanel = document.getElementById('cartPanel');
+    const paymentModal = document.getElementById('paymentModal');
+    let carrito = [];
+    let subtotalActual = 0;
+
+    function toggleCart() {
+      if (cartOverlay.classList.contains('hidden')) {
+        cartOverlay.classList.remove('hidden');
+        setTimeout(() => {
+          cartOverlay.classList.remove('opacity-0');
+          cartPanel.classList.remove('translate-x-full');
+        }, 10);
+      } else {
+        cartOverlay.classList.add('opacity-0');
+        cartPanel.classList.add('translate-x-full');
+        setTimeout(() => cartOverlay.classList.add('hidden'), 300);
+      }
+    }
+
+    // Botón Agregar: actualiza carrito y anima badge, sin abrir panel
+    function agregarAlCarrito(nombre, precio) {
+      carrito.push({ id: Date.now(), nombre, precio });
+      actualizarCarritoDOM();
+      
+      // Animar el badge
+      const badge = document.getElementById('cart-count');
+      badge.classList.remove('animate-bounce-short');
+      void badge.offsetWidth; // trigger reflow
+      badge.classList.add('animate-bounce-short');
+    }
+
+    function eliminarDelCarrito(id) {
+      carrito = carrito.filter(item => item.id !== id);
+      actualizarCarritoDOM();
+    }
+
+    function actualizarCarritoDOM() {
+      const container = document.getElementById('cartItemsContainer');
+      document.getElementById('cart-count').innerText = carrito.length;
+
+      if (carrito.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-400 mt-10 text-sm">Tu carrito está vacío.</p>';
+        document.getElementById('openPaymentBtn').disabled = true;
+        document.getElementById('cart-subtotal').innerText = 'S/ 0.00';
+        subtotalActual = 0;
+        return;
+      }
+
+      subtotalActual = 0;
+      container.innerHTML = '';
+      carrito.forEach(item => {
+        subtotalActual += item.precio;
+        container.innerHTML += `
+          <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+            <div>
+              <h4 class="text-sm font-bold text-gray-800">${item.nombre}</h4>
+              <p class="text-sm text-brand-500 font-bold">S/ ${item.precio.toFixed(2)}</p>
+            </div>
+            <button onclick="eliminarDelCarrito(${item.id})" class="text-xs text-red-500 hover:text-red-700 underline"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>`;
+      });
+      lucide.createIcons();
+      document.getElementById('cart-subtotal').innerText = `S/ ${subtotalActual.toFixed(2)}`;
+      document.getElementById('openPaymentBtn').disabled = false;
+    }
+
+    // Bindings de apertura
+    document.getElementById('openCartBtn').onclick = toggleCart;
+    document.getElementById('closeCartBtn').onclick = toggleCart;
+    cartOverlay.onclick = toggleCart;
+
+    // Checkout Flow
+    document.getElementById('openPaymentBtn').onclick = () => {
+      toggleCart();
+      setTimeout(() => {
+        paymentModal.classList.remove('hidden');
+        paymentModal.classList.add('flex');
+        toggleMap(false); // resetear a pickup
+        document.querySelector('input[value="pickup"]').checked = true;
+      }, 300);
+    };
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function toggleMap(isDelivery) {
+      const container = document.getElementById('mapContainer');
+      const input = document.getElementById('addressInput');
+      const displayTotal = document.getElementById('modal-total-display');
+      
+      let finalTotal = subtotalActual;
+      if (isDelivery) {
+        container.classList.remove('hidden');
+        input.setAttribute('required', 'true');
+        finalTotal += 5.00;
+      } else {
+        container.classList.add('hidden');
+        input.removeAttribute('required');
+      }
+      displayTotal.innerText = `S/ ${finalTotal.toFixed(2)}`;
+    }
+
+    document.getElementById('paymentForm').onsubmit = (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('paySubmitBtn');
+      btn.disabled = true;
+      btn.innerText = 'Procesando...';
+
+      setTimeout(() => {
+        document.getElementById('paymentForm').classList.add('hidden');
+        document.getElementById('successScreen').classList.remove('hidden');
+        document.getElementById('successScreen').classList.add('flex');
+      }, 1500);
+    };
+
+    function redirigirSaaS() {
+      alert("Redirigiendo a: tracking.saasdelivery.com/order/ORD-892\n\n(Aquí inicia la aplicación de seguimiento conectada con el SaaS)");
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

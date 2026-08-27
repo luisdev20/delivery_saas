@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Delivery Tracker | Portal B2B</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { 
+            saas: { 900: '#312E81', 600: '#4F46E5', 100: '#F1F5F9' }, 
+            status: { prep: '#3B82F6', ready: '#10B981', transit: '#F59E0B', cancel: '#EF4444' } 
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-saas-100 text-slate-800 font-sans antialiased h-screen overflow-hidden flex">
+
+  <!-- ================= VISTA 0: LOGIN B2B ================= -->
+  <div id="view-login" class="fixed inset-0 z-50 bg-saas-900 flex items-center justify-center flex-col transition-opacity duration-300">
+    <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 32px 32px;"></div>
+    
+    <div class="z-10 text-center mb-8">
+      <div class="w-16 h-16 bg-saas-600 rounded-xl mx-auto flex items-center justify-center mb-4 shadow-lg border border-indigo-400">
+        <i data-lucide="box" class="w-8 h-8 text-white"></i>
+      </div>
+      <h1 class="text-3xl font-bold text-white tracking-tight">Delivery Tracker SaaS</h1>
+      <p class="text-indigo-200 text-sm mt-2">Portal de Acceso B2B</p>
+    </div>
+
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md z-10">
+      <div class="mb-6">
+        <label class="block text-xs font-semibold text-slate-500 mb-1">Comercio (Tenant)</label>
+        <input type="text" value="RES-SABORES-MILENARIOS" disabled class="w-full p-2.5 border border-slate-200 rounded bg-slate-50 text-slate-500 text-sm">
+      </div>
+      <div class="mb-6">
+        <label class="block text-xs font-semibold text-slate-500 mb-1">Contraseña</label>
+        <input type="password" placeholder="••••••••" class="w-full p-2.5 border border-slate-300 rounded focus:outline-none focus:border-saas-600 focus:ring-1 focus:ring-saas-600">
+      </div>
+      
+      <div class="space-y-3 mt-6 border-t border-slate-100 pt-6">
+        <button onclick="loginAs('admin')" class="w-full bg-saas-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Ingresar como Administrador
+        </button>
+        <button onclick="loginAs('kitchen')" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+          <i data-lucide="chef-hat" class="w-4 h-4"></i> Ingresar como Cocina (KDS Fullscreen)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SIDEBAR (Solo Administrador) ================= -->
+  <aside id="sidebar" class="w-64 bg-saas-900 text-white flex-col shadow-xl z-20 hidden">
+    <div class="p-6 border-b border-indigo-800 flex items-center gap-3">
+      <div class="w-8 h-8 bg-saas-600 rounded-lg flex items-center justify-center"><i data-lucide="box" class="w-4 h-4"></i></div>
+      <span class="font-bold text-sm tracking-wide">Delivery Tracker</span>
+    </div>
+    
+    <nav class="flex-1 px-4 py-6 space-y-2">
+      <button onclick="switchAdminTab('dashboard')" id="btn-tab-dashboard" class="w-full flex items-center gap-3 px-3 py-2.5 bg-saas-600 rounded-lg text-sm font-medium transition-colors">
+        <i data-lucide="bar-chart-2" class="w-4 h-4"></i> Dashboard
+      </button>
+      <button onclick="switchAdminTab('fleet')" id="btn-tab-fleet" class="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-800 rounded-lg text-sm font-medium text-indigo-200 transition-colors">
+        <i data-lucide="users" class="w-4 h-4"></i> Gestión de Flota
+      </button>
+      <button onclick="switchAdminTab('kitchen')" id="btn-tab-kitchen" class="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-800 rounded-lg text-sm font-medium text-indigo-200 transition-colors">
+        <i data-lucide="chef-hat" class="w-4 h-4"></i> Monitor Cocina (KDS)
+      </button>
+    </nav>
+    <div class="p-4 border-t border-indigo-800">
+      <button onclick="logout()" class="w-full flex items-center justify-center gap-2 px-3 py-2 hover:bg-red-900/50 text-indigo-300 hover:text-red-300 rounded-lg text-sm transition-colors border border-indigo-800">
+        <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- ================= ÁREA DE CONTENIDO PRINCIPAL ================= -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+    
+    <!-- KDS Header (Solo visible en Modo Cocina a pantalla completa) -->
+    <header id="kds-header" class="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md hidden shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="bg-saas-600 text-xs font-bold px-2 py-1 rounded">MODO KDS</div>
+        <h2 class="font-bold text-lg">Cocina - Sabores Milenarios</h2>
+      </div>
+      <button onclick="logout()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg flex gap-2 items-center text-sm">
+        <i data-lucide="log-out" class="w-4 h-4"></i> Salir
+      </button>
+    </header>
+
+    <!-- TABS DE CONTENIDO -->
+    
+    <!-- 1. Dashboard -->
+    <div id="tab-dashboard" class="flex-1 overflow-y-auto p-8 hidden">
+      <header class="flex justify-between items-center mb-8">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-800">Monitor de Despachos</h2>
+          <p class="text-slate-500 text-sm">Control operativo en tiempo real</p>
+        </div>
+      </header>
+
+      <div class="grid grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-saas-600"><i data-lucide="shopping-bag" class="w-6 h-6"></i></div>
+          <div><p class="text-sm text-slate-500 font-medium">Envíos Hoy</p><p class="text-2xl font-bold text-slate-800">42</p></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600"><i data-lucide="truck" class="w-6 h-6"></i></div>
+          <div><p class="text-sm text-slate-500 font-medium">En Ruta</p><p class="text-2xl font-bold text-slate-800">3</p></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600"><i data-lucide="clock" class="w-6 h-6"></i></div>
+          <div><p class="text-sm text-slate-500 font-medium">Tiempo Promedio</p><p class="text-2xl font-bold text-slate-800">28 min</p></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+            <tr>
+              <th class="p-4 font-semibold">ID Pedido</th>
+              <th class="p-4 font-semibold">Cliente</th>
+              <th class="p-4 font-semibold">Repartidor</th>
+              <th class="p-4 font-semibold">Estado</th>
+              <th class="p-4 font-semibold text-right">Acción Operativa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+              <td class="p-4 font-bold text-slate-800">#ORD-891</td>
+              <td class="p-4">María López</td>
+              <td class="p-4">Carlos R.</td>
+              <td class="p-4"><span class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-xs font-bold">En Camino</span></td>
+              <td class="p-4 text-right">
+                <button onclick="openTrackingDrawer('ORD-891')" class="bg-saas-100 text-saas-600 hover:bg-saas-600 hover:text-white px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5 ml-auto text-xs">
+                  <i data-lucide="map" class="w-3.5 h-3.5"></i> Rastrear
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 2. Gestión de Flota -->
+    <div id="tab-fleet" class="flex-1 overflow-y-auto p-8 hidden">
+      <header class="flex justify-between items-center mb-8">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-800">Gestión de Flota</h2>
+          <p class="text-slate-500 text-sm">Control de repartidores y accesos a la App Móvil</p>
+        </div>
+        <button onclick="openModal('fleetModal')" class="bg-saas-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 hover:bg-indigo-700 transition-colors">
+          <i data-lucide="plus" class="w-4 h-4"></i> Nuevo Repartidor
+        </button>
+      </header>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+            <tr>
+              <th class="p-4 font-semibold">Repartidor</th>
+              <th class="p-4 font-semibold">Vehículo / Placa</th>
+              <th class="p-4 font-semibold">Contacto (WhatsApp)</th>
+              <th class="p-4 font-semibold">Usuario App (Credencial)</th>
+              <th class="p-4 font-semibold">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-slate-100">
+              <td class="p-4 font-bold text-slate-800">Carlos Rodríguez</td>
+              <td class="p-4 text-slate-500">Moto • <span class="font-mono bg-slate-100 px-1 rounded">A1B-234</span></td>
+              <td class="p-4 text-emerald-600 font-medium">987 654 321</td>
+              <td class="p-4 text-slate-500">carlos.r@reparto.pe</td>
+              <td class="p-4"><span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">Activo (Ruta)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. Monitor de Cocina (KDS) -->
+    <div id="tab-kitchen" class="flex-1 p-6 flex flex-col bg-slate-100 hidden">
+      <!-- Grid Kanban -->
+      <div class="flex-1 flex gap-6 overflow-x-auto min-h-0">
+        
+        <!-- Columna 1: Nuevos -->
+        <div class="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+          <div class="bg-slate-50 p-3 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
+            <span>1. Nuevos (Pagados)</span> <span class="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-full">1</span>
+          </div>
+          <div class="p-4 flex-1 overflow-y-auto space-y-4" id="col-nuevos">
+            
+            <div class="bg-white border-2 border-slate-200 rounded-lg p-4 shadow-sm" id="ticket-1">
+              <div class="flex justify-between items-start mb-2">
+                <span class="font-black text-lg text-slate-800">#ORD-893</span>
+                <span class="text-xs font-bold text-slate-500">Hace 2 min</span>
+              </div>
+              <ul class="text-sm text-slate-600 mb-4 list-disc pl-4 space-y-1 font-medium">
+                <li>2x Lomo Saltado al Wok</li>
+                <li>1x Jarra de Chicha Morada</li>
+              </ul>
+              <div class="flex gap-2">
+                <button onclick="moverTicket('ticket-1', 'col-prep')" class="flex-1 bg-status-prep hover:bg-blue-600 text-white font-bold py-2 rounded text-xs transition-colors">
+                  Preparar
+                </button>
+                <button onclick="openRejectModal('ticket-1')" class="px-3 bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded text-xs transition-colors">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Columna 2: En Preparación -->
+        <div class="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+          <div class="bg-blue-50 p-3 border-b border-blue-100 font-bold text-blue-800 flex justify-between items-center">
+            <span>2. En Preparación</span> <span class="bg-blue-200 text-blue-800 text-xs px-2 py-0.5 rounded-full">1</span>
+          </div>
+          <div class="p-4 flex-1 overflow-y-auto bg-blue-50/30 space-y-4" id="col-prep">
+            <div class="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm" id="ticket-2">
+              <div class="flex justify-between items-start mb-2">
+                <span class="font-black text-lg text-slate-800">#ORD-892</span>
+                <span class="text-xs font-bold text-amber-600">Hace 12 min</span>
+              </div>
+              <ul class="text-sm text-slate-600 mb-4 list-disc pl-4 space-y-1 font-medium">
+                <li>1x Ají de Gallina</li>
+              </ul>
+              <button onclick="moverTicket('ticket-2', 'col-listo')" class="w-full bg-status-ready hover:bg-emerald-600 text-white font-bold py-2 rounded text-xs transition-colors shadow-sm">
+                Marcar como Listo
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna 3: Listos -->
+        <div class="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+          <div class="bg-emerald-50 p-3 border-b border-emerald-100 font-bold text-emerald-800 flex justify-between items-center">
+            <span>3. Listos (Bolsa de Entrega)</span> <span class="bg-emerald-200 text-emerald-800 text-xs px-2 py-0.5 rounded-full">0</span>
+          </div>
+          <div class="p-4 flex-1 overflow-y-auto bg-emerald-50/30 space-y-4" id="col-listo">
+            <!-- Tickets terminados caen aquí -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================= CAJÓN LATERAL DE RASTREO (DRAWER) ================= -->
+    <div id="trackingDrawerOverlay" class="absolute inset-0 bg-slate-900/40 z-30 hidden transition-opacity opacity-0" onclick="closeTrackingDrawer()"></div>
+    <div id="trackingDrawer" class="absolute top-0 right-0 w-[400px] h-full bg-white shadow-2xl z-40 translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200">
+      <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <div>
+          <h3 class="font-bold text-lg text-slate-800">Rastreo <span id="track-id">#ORD-891</span></h3>
+          <p class="text-xs text-slate-500">Cliente: María López</p>
+        </div>
+        <button onclick="closeTrackingDrawer()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      
+      <!-- Mapa Mock -->
+      <div class="h-48 bg-slate-200 relative overflow-hidden">
+        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover opacity-80">
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="bg-saas-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg border-2 border-white flex items-center gap-1">
+            <i data-lucide="truck" class="w-3.5 h-3.5"></i> Carlos R.
+          </div>
+        </div>
+      </div>
+
+      <!-- Bitácora Logística -->
+      <div class="flex-1 p-6 overflow-y-auto bg-white">
+        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Bitácora Operativa</h4>
+        <div class="relative pl-4 border-l-2 border-slate-200 space-y-6">
+          <div class="relative">
+            <div class="absolute -left-[21px] bg-slate-200 w-3 h-3 rounded-full border-2 border-white"></div>
+            <p class="text-xs text-slate-400">12:00 PM</p>
+            <p class="text-sm font-semibold text-slate-700">Orden Recibida (Pagada)</p>
+          </div>
+          <div class="relative">
+            <div class="absolute -left-[21px] bg-slate-200 w-3 h-3 rounded-full border-2 border-white"></div>
+            <p class="text-xs text-slate-400">12:05 PM</p>
+            <p class="text-sm font-semibold text-slate-700">En Preparación (Cocina)</p>
+          </div>
+          <div class="relative">
+            <div class="absolute -left-[21px] bg-saas-600 w-3 h-3 rounded-full border-2 border-white"></div>
+            <p class="text-xs text-slate-400">12:20 PM</p>
+            <p class="text-sm font-semibold text-saas-600">Repartidor Asignado / En Ruta</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Acciones de Contacto -->
+      <div class="p-5 border-t border-slate-200 bg-slate-50 space-y-3">
+        <button class="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors border border-emerald-200">
+          <i data-lucide="phone" class="w-4 h-4"></i> Llamar al Repartidor
+        </button>
+        <button class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors border border-slate-300">
+          <i data-lucide="user" class="w-4 h-4"></i> Contactar Cliente
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= MODALES ================= -->
+
+  <!-- Modal Registro Flota -->
+  <div id="fleetModal" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+      <div class="bg-saas-50 p-5 border-b border-saas-100 flex justify-between items-center">
+        <h3 class="font-bold text-slate-800 text-lg">Registrar Repartidor</h3>
+        <button onclick="closeModal('fleetModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form class="p-6 space-y-4" onsubmit="event.preventDefault(); alert('Repartidor registrado. Se le han enviado sus credenciales de la App Móvil.'); closeModal('fleetModal');">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Nombre Completo</label>
+          <input type="text" required class="w-full p-2 border border-slate-300 rounded text-sm focus:border-saas-600 focus:outline-none">
+        </div>
+        <div class="flex gap-4">
+          <div class="flex-1">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Celular (WhatsApp)</label>
+            <input type="tel" required class="w-full p-2 border border-slate-300 rounded text-sm focus:border-saas-600 focus:outline-none">
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Placa Vehículo</label>
+            <input type="text" class="w-full p-2 border border-slate-300 rounded text-sm focus:border-saas-600 focus:outline-none uppercase">
+          </div>
+        </div>
+        <hr class="border-slate-100 my-2">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Usuario (App Móvil)</label>
+          <input type="email" required placeholder="correo@reparto.pe" class="w-full p-2 border border-slate-300 rounded text-sm focus:border-saas-600 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Contraseña de acceso</label>
+          <input type="text" value="Gnv82K!m" readonly class="w-full p-2 border border-slate-200 rounded text-sm bg-slate-50 text-slate-500 font-mono">
+        </div>
+        <button type="submit" class="w-full mt-2 bg-saas-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded transition-colors">Guardar y Asignar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Rechazo de Orden -->
+  <div id="rejectModal" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+      <div class="bg-red-50 p-5 border-b border-red-100 flex justify-between items-center">
+        <h3 class="font-bold text-red-700 text-lg flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> Rechazar Pedido</h3>
+        <button onclick="closeModal('rejectModal')" class="text-red-400 hover:text-red-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form class="p-6 space-y-4" onsubmit="processReject(event)">
+        <p class="text-sm text-slate-600 mb-2">Seleccione el motivo de la cancelación. Esto notificará al cliente y procesará el reembolso automático.</p>
+        
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="motivo" value="Insumos Agotados" required class="text-red-600 focus:ring-red-500" onchange="toggleManualReason(false)"> Insumos Agotados (Fuera de Stock)
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="motivo" value="Fuera de Horario" class="text-red-600 focus:ring-red-500" onchange="toggleManualReason(false)"> Cocina Cerrada / Fuera de Horario
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="motivo" value="Otro" class="text-red-600 focus:ring-red-500" onchange="toggleManualReason(true)"> Otro Motivo (Especificar)
+          </label>
+        </div>
+
+        <textarea id="manualReason" disabled placeholder="Escriba la razón exacta..." class="w-full p-2 border border-slate-300 rounded text-sm focus:border-red-500 focus:outline-none mt-2 h-20 bg-slate-50 disabled:opacity-50"></textarea>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeModal('rejectModal')" class="flex-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold py-2.5 rounded transition-colors text-sm">Cancelar</button>
+          <button type="submit" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded transition-colors text-sm">Confirmar Rechazo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    
+    let currentTicketToReject = null;
+
+    // Lógica SPA (Login/Roles)
+    const viewLogin = document.getElementById('view-login');
+    const sidebar = document.getElementById('sidebar');
+    const kdsHeader = document.getElementById('kds-header');
+    
+    // Tabs
+    const tabDashboard = document.getElementById('tab-dashboard');
+    const tabFleet = document.getElementById('tab-fleet');
+    const tabKitchen = document.getElementById('tab-kitchen');
+
+    function loginAs(role) {
+      viewLogin.classList.add('hidden');
+      
+      if (role === 'admin') {
+        sidebar.classList.remove('hidden');
+        sidebar.classList.add('flex');
+        kdsHeader.classList.add('hidden');
+        switchAdminTab('dashboard');
+      } else if (role === 'kitchen') {
+        sidebar.classList.add('hidden');
+        sidebar.classList.remove('flex');
+        kdsHeader.classList.remove('hidden');
+        
+        tabDashboard.classList.add('hidden');
+        tabFleet.classList.add('hidden');
+        tabKitchen.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      sidebar.classList.add('hidden');
+      sidebar.classList.remove('flex');
+      tabDashboard.classList.add('hidden');
+      tabFleet.classList.add('hidden');
+      tabKitchen.classList.add('hidden');
+      kdsHeader.classList.add('hidden');
+      viewLogin.classList.remove('hidden');
+    }
+
+    function switchAdminTab(tab) {
+      // Reset estilos botones
+      ['dashboard', 'fleet', 'kitchen'].forEach(t => {
+        document.getElementById(`btn-tab-${t}`).className = 'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-800 rounded-lg text-sm font-medium text-indigo-200 transition-colors';
+      });
+      document.getElementById(`btn-tab-${tab}`).className = 'w-full flex items-center gap-3 px-3 py-2.5 bg-saas-600 rounded-lg text-sm font-medium transition-colors text-white';
+
+      // Mostrar contenido
+      tabDashboard.classList.add('hidden');
+      tabFleet.classList.add('hidden');
+      tabKitchen.classList.add('hidden');
+
+      if (tab === 'dashboard') tabDashboard.classList.remove('hidden');
+      if (tab === 'fleet') tabFleet.classList.remove('hidden');
+      if (tab === 'kitchen') tabKitchen.classList.remove('hidden');
+    }
+
+    // Modal y Drawer logic
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+      document.getElementById(id).classList.add('flex');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+      document.getElementById(id).classList.remove('flex');
+    }
+
+    const trackingDrawer = document.getElementById('trackingDrawer');
+    const trackingDrawerOverlay = document.getElementById('trackingDrawerOverlay');
+    
+    function openTrackingDrawer(orderId) {
+      document.getElementById('track-id').innerText = '#' + orderId;
+      trackingDrawerOverlay.classList.remove('hidden');
+      setTimeout(() => {
+        trackingDrawerOverlay.classList.remove('opacity-0');
+        trackingDrawer.classList.remove('translate-x-full');
+      }, 10);
+    }
+    
+    function closeTrackingDrawer() {
+      trackingDrawerOverlay.classList.add('opacity-0');
+      trackingDrawer.classList.add('translate-x-full');
+      setTimeout(() => trackingDrawerOverlay.classList.add('hidden'), 300);
+    }
+
+    // Lógica KDS: Mover tickets
+    function moverTicket(ticketId, destinoId) {
+      const ticket = document.getElementById(ticketId);
+      const btns = ticket.querySelectorAll('button');
+      
+      ticket.style.opacity = '0';
+      
+      setTimeout(() => {
+        document.getElementById(destinoId).appendChild(ticket);
+        ticket.style.opacity = '1';
+        
+        if(destinoId === 'col-prep') {
+          ticket.className = 'bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm transition-opacity duration-300';
+          
+          // Reemplazar botones por uno solo de "Marcar Listo"
+          const btnContainer = ticket.querySelector('.flex.gap-2') || ticket;
+          if (btnContainer.classList.contains('flex')) {
+            btnContainer.innerHTML = `<button onclick="moverTicket('${ticketId}', 'col-listo')" class="w-full bg-status-ready hover:bg-emerald-600 text-white font-bold py-2 rounded text-xs transition-colors shadow-sm">Marcar como Listo</button>`;
+          }
+        } else if(destinoId === 'col-listo') {
+          ticket.className = 'bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm transition-opacity duration-300';
+          
+          // Ocultar botón y mostrar aviso de asignación
+          const btn = ticket.querySelector('button');
+          if(btn) btn.style.display = 'none';
+          
+          const divEspera = document.createElement('div');
+          divEspera.className = 'mt-3 text-[10px] font-bold text-emerald-600 bg-emerald-50 py-2 rounded text-center border border-emerald-100 flex justify-center gap-1.5 items-center uppercase tracking-wider';
+          divEspera.innerHTML = '<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> Esperando Repartidor';
+          ticket.appendChild(divEspera);
+        }
+      }, 300);
+    }
+
+    // Lógica de Rechazo de Comanda
+    function openRejectModal(ticketId) {
+      currentTicketToReject = ticketId;
+      document.getElementById('manualReason').value = '';
+      document.getElementById('manualReason').disabled = true;
+      document.getElementById('manualReason').classList.add('bg-slate-50');
+      
+      const radios = document.querySelectorAll('input[name="motivo"]');
+      radios.forEach(r => r.checked = false);
+      
+      openModal('rejectModal');
+    }
+
+    function toggleManualReason(isManual) {
+      const textarea = document.getElementById('manualReason');
+      textarea.disabled = !isManual;
+      if (isManual) {
+        textarea.classList.remove('bg-slate-50');
+        textarea.focus();
+      } else {
+        textarea.classList.add('bg-slate-50');
+        textarea.value = '';
+      }
+    }
+
+    function processReject(e) {
+      e.preventDefault();
+      const ticket = document.getElementById(currentTicketToReject);
+      
+      // Ocultar modal y desaparecer ticket
+      closeModal('rejectModal');
+      ticket.style.opacity = '0';
+      
+      setTimeout(() => {
+        ticket.remove();
+        alert('El pedido ha sido rechazado formalmente. Se ha actualizado el estado a CANCELADO en la base de datos y se ha notificado al sistema de reembolsos.');
+      }, 300);
+    }
+  </script>
+</body>
+</html>
