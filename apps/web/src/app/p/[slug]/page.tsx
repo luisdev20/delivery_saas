@@ -10,12 +10,22 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const supabase = await createClient();
-  const { data: restaurant } = await supabase
+  let { data: restaurant } = await supabase
     .from('restaurants')
     .select('name, address')
     .eq('slug', slug)
-    .single();
+    .maybeSingle();
+
+  if (!restaurant) {
+    const normalized = slug.replace(/^el-/, '');
+    const { data: fallback } = await supabase
+      .from('restaurants')
+      .select('name, address')
+      .ilike('slug', `%${normalized}%`)
+      .limit(1)
+      .maybeSingle();
+    restaurant = fallback;
+  }
 
   if (!restaurant) return { title: 'Restaurante no encontrado' };
 
@@ -29,13 +39,25 @@ export default async function MenuPage({ params }: Props) {
   const { slug } = await params;
   const supabase = await createClient();
 
-  const { data: restaurant, error } = await supabase
+  let { data: restaurant } = await supabase
     .from('restaurants')
     .select('*')
     .eq('slug', slug)
-    .single();
+    .maybeSingle();
 
-  if (error || !restaurant) {
+  if (!restaurant) {
+    // Try matching normalized slug without 'el-' or find by name/ilike
+    const normalized = slug.replace(/^el-/, '');
+    const { data: fallback } = await supabase
+      .from('restaurants')
+      .select('*')
+      .ilike('slug', `%${normalized}%`)
+      .limit(1)
+      .maybeSingle();
+    restaurant = fallback;
+  }
+
+  if (!restaurant) {
     notFound();
   }
 
