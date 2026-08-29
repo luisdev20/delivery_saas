@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import {
   ShoppingBag, MapPin, Phone, X, Plus, Minus,
@@ -156,9 +156,48 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
         }
       }
     } catch (_) {}
-    // Fallback default coordinates (Lima center)
     return { lat: -12.0464, lng: -77.0428 };
   };
+
+  // Debounced live geocoding as the user types their address
+  useEffect(() => {
+    if (!form.delivery_address || form.delivery_address.trim().length < 5) return;
+    const timer = setTimeout(async () => {
+      const coords = await geocodeAddress(form.delivery_address);
+      setLocation(coords);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [form.delivery_address]);
+
+  // Handle map click or pin drag to reverse geocode and update address input
+  const handleMapPick = useCallback(async (lat: number, lng: number) => {
+    setLocation({ lat, lng });
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const road = addr.road || addr.pedestrian || addr.street || '';
+          const houseNumber = addr.house_number || '';
+          const suburb = addr.suburb || addr.neighbourhood || addr.city_district || '';
+          const city = addr.city || addr.town || '';
+
+          const parts: string[] = [];
+          if (road) parts.push(houseNumber ? `${road} ${houseNumber}` : road);
+          if (suburb) parts.push(suburb);
+          else if (city) parts.push(city);
+
+          const readableAddress = parts.join(', ') || data.display_name;
+          if (readableAddress) {
+            setForm(f => ({ ...f, delivery_address: readableAddress }));
+          }
+        }
+      }
+    } catch (_) {}
+  }, []);
 
   const handleSubmitOrder = async () => {
     if (!form.customer_name || !form.customer_phone || !form.delivery_address) {
@@ -549,7 +588,7 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Dirección exacta *</label>
+              <label className="form-label">Dirección completa *</label>
               <input
                 className="form-input"
                 placeholder="Ej. Av. Javier Prado Este 2465, San Borja"
@@ -575,6 +614,13 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
                 </>
               )}
             </button>
+
+            {/* Live Interactive Mini Map */}
+            <DeliveryMiniMap
+              location={location}
+              brandColor={restaurant.brand_color}
+              onPickLocation={handleMapPick}
+            />
 
             <div className="form-group">
               <label className="form-label">Referencia (opcional)</label>
@@ -729,6 +775,130 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function DeliveryMiniMap({
+  location,
+  brandColor,
+  onPickLocation,
+}: {
+  location: { lat: number; lng: number } | null;
+  brandColor: string;
+  onPickLocation: (lat: number, lng: number) => void;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<unknown>(null);
+  const markerRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || leafletMapRef.current) return;
+
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    import('leaflet').then(L => {
+      if (!mapContainerRef.current) return;
+
+      const initialLat = location?.lat ?? -12.0464;
+      const initialLng = location?.lng ?? -77.0428;
+
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([initialLat, initialLng], location ? 16 : 13);
+
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+
+      const customIcon = L.divIcon({
+        className: 'custom-delivery-pin',
+        html: `
+          <div style="
+            background: ${brandColor || '#4F46E5'};
+            width: 32px;
+            height: 32px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 3px solid white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+          ">
+            <div style="
+              width: 10px;
+              height: 10px;
+              background: white;
+              border-radius: 50%;
+              transform: rotate(45deg);
+            "></div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+      });
+
+      const marker = L.marker([initialLat, initialLng], {
+        icon: customIcon,
+        draggable: true,
+      }).addTo(map);
+
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        onPickLocation(pos.lat, pos.lng);
+      });
+
+      map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
+        marker.setLatLng(e.latlng);
+        onPickLocation(e.latlng.lat, e.latlng.lng);
+      });
+
+      leafletMapRef.current = map;
+      markerRef.current = marker;
+    });
+
+    return () => {
+      if (leafletMapRef.current) {
+        (leafletMapRef.current as { remove: () => void }).remove();
+        leafletMapRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!leafletMapRef.current || !markerRef.current || !location) return;
+    const map = leafletMapRef.current as { setView: (coords: [number, number], zoom: number, options?: { animate: boolean }) => void };
+    const marker = markerRef.current as { setLatLng: (coords: [number, number]) => void };
+
+    marker.setLatLng([location.lat, location.lng]);
+    map.setView([location.lat, location.lng], 16, { animate: true });
+  }, [location]);
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <div className="flex justify-between items-center text-xs">
+        <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+          <MapPin size={14} style={{ color: brandColor || '#4F46E5' }} />
+          Punto exacto de entrega en mapa
+        </span>
+        <span className="text-slate-400 text-[11px]">
+          Mueve el pin o haz clic
+        </span>
+      </div>
+      <div
+        ref={mapContainerRef}
+        className="w-full h-44 rounded-xl overflow-hidden border border-slate-200 shadow-inner relative z-0"
+      />
     </div>
   );
 }
