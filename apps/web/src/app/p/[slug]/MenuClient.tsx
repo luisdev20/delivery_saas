@@ -103,22 +103,66 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
           timeout: 10000,
         })
       );
-      setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-      toast.success('Ubicación GPS capturada');
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setLocation({ lat, lng });
+
+      // Reverse geocoding via OpenStreetMap Nominatim
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.address) {
+            const addr = data.address;
+            const road = addr.road || addr.pedestrian || addr.street || '';
+            const houseNumber = addr.house_number || '';
+            const suburb = addr.suburb || addr.neighbourhood || addr.city_district || '';
+            const city = addr.city || addr.town || '';
+
+            const parts: string[] = [];
+            if (road) parts.push(houseNumber ? `${road} ${houseNumber}` : road);
+            if (suburb) parts.push(suburb);
+            else if (city) parts.push(city);
+
+            const readableAddress = parts.join(', ') || data.display_name;
+            if (readableAddress) {
+              setForm(f => ({ ...f, delivery_address: readableAddress }));
+            }
+          }
+        }
+      } catch (_) {}
+
+      toast.success('Ubicación capturada y dirección autocompletada');
     } catch {
-      toast.error('No se pudo obtener la ubicación. Ingrese la dirección manualmente.');
+      toast.error('No se pudo obtener el GPS. Puedes escribir tu dirección manualmente.');
     } finally {
       setIsLocating(false);
     }
   };
 
+  const geocodeAddress = async (addressText: string): Promise<{ lat: number; lng: number }> => {
+    try {
+      const query = encodeURIComponent(`${addressText}, Peru`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) {
+          return {
+            lat: parseFloat(results[0].lat),
+            lng: parseFloat(results[0].lon),
+          };
+        }
+      }
+    } catch (_) {}
+    // Fallback default coordinates (Lima center)
+    return { lat: -12.0464, lng: -77.0428 };
+  };
+
   const handleSubmitOrder = async () => {
     if (!form.customer_name || !form.customer_phone || !form.delivery_address) {
-      toast.error('Complete nombre, teléfono y dirección');
-      return;
-    }
-    if (!location) {
-      toast.error('Comparta su ubicación GPS');
+      toast.error('Complete nombre, teléfono y dirección de entrega');
       return;
     }
     if (cart.length === 0) {
@@ -130,6 +174,16 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
     const supabase = createClient();
 
     try {
+      // Resolve coordinates (use captured GPS or geocode typed address)
+      let finalLat = location?.lat;
+      let finalLng = location?.lng;
+
+      if (!finalLat || !finalLng) {
+        const geocoded = await geocodeAddress(form.delivery_address);
+        finalLat = geocoded.lat;
+        finalLng = geocoded.lng;
+      }
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -138,8 +192,8 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
           customer_phone: form.customer_phone,
           delivery_address: form.delivery_address,
           delivery_reference: form.delivery_reference || null,
-          delivery_lat: location.lat,
-          delivery_lng: location.lng,
+          delivery_lat: finalLat,
+          delivery_lng: finalLng,
           payment_method: form.payment_method,
           cash_amount_change: form.payment_method === 'EFECTIVO' && form.cash_amount_change
             ? parseFloat(form.cash_amount_change)
@@ -489,24 +543,48 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
 
           {/* Address */}
           <div className="card p-4 space-y-4">
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Dirección de entrega</h3>
-            <button onClick={getGPSLocation} disabled={isLocating} className="btn btn-secondary btn-full" id="btn-gps">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Dirección de entrega</h3>
+              <span className="text-xs text-slate-400 font-medium">Manual o GPS</span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Dirección exacta *</label>
+              <input
+                className="form-input"
+                placeholder="Ej. Av. Javier Prado Este 2465, San Borja"
+                value={form.delivery_address}
+                onChange={e => setForm(f => ({ ...f, delivery_address: e.target.value }))}
+                id="input-address"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={getGPSLocation}
+              disabled={isLocating}
+              className="btn btn-secondary w-full text-xs font-semibold py-2.5 flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-100 transition-colors"
+              id="btn-gps"
+            >
               {isLocating ? (
-                <><Loader2 size={16} className="animate-spin" /> Localizando...</>
+                <><Loader2 size={15} className="animate-spin" /> Obteniendo coordenadas y dirección...</>
               ) : (
-                <><MapPin size={16} style={{ color: location ? 'var(--status-entregado)' : undefined }} />
-                  {location ? 'Ubicación GPS guardada' : 'Compartir ubicación GPS'}</>
+                <>
+                  <MapPin size={15} style={{ color: location ? '#10B981' : restaurant.brand_color }} />
+                  {location ? 'Ubicación GPS sincronizada (Clic para recalcular)' : 'Autocompletar dirección con mi GPS actual (Opcional)'}
+                </>
               )}
             </button>
-            <div className="form-group">
-              <label className="form-label">Dirección *</label>
-              <input className="form-input" placeholder="Av. Principal 123" value={form.delivery_address}
-                onChange={e => setForm(f => ({ ...f, delivery_address: e.target.value }))} id="input-address" />
-            </div>
+
             <div className="form-group">
               <label className="form-label">Referencia (opcional)</label>
-              <input className="form-input" placeholder="Ej. Frente al parque" value={form.delivery_reference}
-                onChange={e => setForm(f => ({ ...f, delivery_reference: e.target.value }))} id="input-reference" />
+              <input
+                className="form-input"
+                placeholder="Ej. Frente al parque, dpto 302"
+                value={form.delivery_reference}
+                onChange={e => setForm(f => ({ ...f, delivery_reference: e.target.value }))}
+                id="input-reference"
+              />
             </div>
           </div>
 
