@@ -7,7 +7,7 @@ import {
   Bell, Package, Truck, CheckCircle, Clock, XCircle,
   ChefHat, MapPin, Phone, User, CreditCard, MessageSquare,
   LogOut, Menu, UtensilsCrossed, BarChart2, X, Users,
-  ShoppingBag, Timer, ArrowRight, Plus, Pencil, Trash2, Save,
+  ShoppingBag, Timer, ArrowRight, Plus, Pencil, Trash2, Save, Loader2,
 } from 'lucide-react';
 import type { Order, Driver, Restaurant, OrderStatus, Product } from '@/lib/supabase/types';
 
@@ -76,6 +76,9 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trackingDrawerOrder, setTrackingDrawerOrder] = useState<Order | null>(null);
 
+  const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant>(restaurant);
+  const [togglingOpen, setTogglingOpen] = useState(false);
+
   // Driver modal
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [newDriverName, setNewDriverName] = useState('');
@@ -91,6 +94,25 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
   const trackingLeafletRef = useRef<unknown>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const supabase = createClient();
+
+  const toggleStoreStatus = async () => {
+    const newStatus = !currentRestaurant.is_open;
+    setTogglingOpen(true);
+    setCurrentRestaurant(prev => ({ ...prev, is_open: newStatus }));
+    try {
+      const { error } = await supabase
+        .from('restaurants')
+        .update({ is_open: newStatus })
+        .eq('id', restaurant.id);
+      if (error) throw error;
+      toast.success(newStatus ? 'Restaurante ABIERTO: Recibiendo nuevos pedidos' : 'Restaurante CERRADO: Pedidos en línea pausados');
+    } catch {
+      setCurrentRestaurant(prev => ({ ...prev, is_open: !newStatus }));
+      toast.error('Error al actualizar el estado del restaurante');
+    } finally {
+      setTogglingOpen(false);
+    }
+  };
 
   const loadOrders = useCallback(async () => {
     const { data } = await supabase
@@ -437,6 +459,32 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
           })}
         </nav>
 
+        {/* Store Status Toggle */}
+        <div className="p-4 border-t border-indigo-800/60 bg-indigo-950/40">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold tracking-wider uppercase text-indigo-300">
+              Estado del Restaurante
+            </span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40' : 'bg-red-500/20 text-red-300 border border-red-400/40'}`}>
+              {currentRestaurant.is_open ? 'ABIERTO' : 'CERRADO'}
+            </span>
+          </div>
+          <button
+            onClick={toggleStoreStatus}
+            disabled={togglingOpen}
+            className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${currentRestaurant.is_open ? 'bg-red-600/90 hover:bg-red-700 text-white shadow-xs' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'}`}
+            id="btn-toggle-store"
+          >
+            {togglingOpen ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : currentRestaurant.is_open ? (
+              <>Cerrar Restaurante (Pausar)</>
+            ) : (
+              <>Abrir Restaurante (Recibir)</>
+            )}
+          </button>
+        </div>
+
         {/* Logout */}
         <div className="p-4 border-t border-indigo-800/60">
           <button
@@ -461,10 +509,13 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             <Menu size={20} />
           </button>
           <span className="font-bold text-sm text-slate-800">{restaurant.name}</span>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
-            En vivo
-          </div>
+          <button
+            onClick={toggleStoreStatus}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${currentRestaurant.is_open ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}
+          >
+            <div className={`w-2 h-2 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500 pulse-dot' : 'bg-red-500'}`} />
+            {currentRestaurant.is_open ? 'Abierto' : 'Cerrado'}
+          </button>
         </header>
 
         {/* ================= TAB 1: DASHBOARD (DESPACHOS) ================= */}

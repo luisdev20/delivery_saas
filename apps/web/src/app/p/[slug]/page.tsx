@@ -4,6 +4,9 @@ import type { Metadata } from 'next';
 import type { Restaurant, Product } from '@/lib/supabase/types';
 import MenuClient from './MenuClient';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface Props {
   params: Promise<{ slug: string }>;
 }

@@ -33,7 +33,8 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   PLIN: 'Plin',
 };
 
-export default function MenuClient({ restaurant, products }: MenuClientProps) {
+export default function MenuClient({ restaurant: initialRestaurant, products }: MenuClientProps) {
+  const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant>(initialRestaurant);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [step, setStep] = useState<CheckoutStep>('home');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -42,6 +43,33 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Sync when initialRestaurant prop changes
+  useEffect(() => {
+    setCurrentRestaurant(initialRestaurant);
+  }, [initialRestaurant]);
+
+  // Realtime subscription for restaurant updates (e.g. is_open toggle)
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-restaurant-${initialRestaurant.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'restaurants',
+        filter: `id=eq.${initialRestaurant.id}`,
+      }, payload => {
+        if (payload.new) {
+          setCurrentRestaurant(payload.new as Restaurant);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [initialRestaurant.id]);
+
+  const restaurant = currentRestaurant;
 
   const [form, setForm] = useState<OrderForm>({
     customer_name: '',
@@ -200,6 +228,10 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
   }, []);
 
   const handleSubmitOrder = async () => {
+    if (!restaurant.is_open) {
+      toast.error('El restaurante está temporalmente cerrado y no puede recibir nuevos pedidos.');
+      return;
+    }
     if (!form.customer_name || !form.customer_phone || !form.delivery_address) {
       toast.error('Complete nombre, teléfono y dirección de entrega');
       return;
@@ -366,6 +398,26 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
           </button>
         </div>
       </header>
+
+      {/* Closed Store Alert Banner */}
+      {!restaurant.is_open && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 text-amber-900 sticky top-[73px] z-30 shadow-xs">
+          <div className="max-w-[1300px] mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0 animate-ping" />
+              <p className="text-xs sm:text-sm font-semibold">
+                <strong className="text-amber-950">Restaurante Cerrado Temporalmente:</strong> En este momento no estamos recibiendo pedidos en línea. Puedes explorar el menú.
+              </p>
+            </div>
+            <a
+              href={`tel:${restaurant.phone}`}
+              className="text-xs font-bold text-amber-900 underline hover:text-amber-950 hidden sm:inline"
+            >
+              Llamar: {restaurant.phone}
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ===== HOME VIEW ===== */}
       {step === 'home' && (
@@ -546,6 +598,17 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
             <h2 className="font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Datos de entrega</h2>
           </div>
 
+          {!restaurant.is_open && (
+            <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-center shadow-xs">
+              <span className="text-xs font-black uppercase tracking-wider block text-amber-950 mb-1">
+                Restaurante Cerrado
+              </span>
+              <p className="text-xs text-amber-800 leading-tight">
+                El restaurante ha pausado la recepción de nuevos pedidos en línea en este momento.
+              </p>
+            </div>
+          )}
+
           {/* Order summary */}
           <div className="card p-4">
             <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
@@ -680,27 +743,33 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
             {step === 'category' ? (
               <button
                 onClick={() => {
+                  if (!restaurant.is_open) {
+                    toast.error('El restaurante está temporalmente cerrado y no recibe pedidos por el momento.');
+                    return;
+                  }
                   if (cart.length === 0) { toast.error('Agregue al menos un producto'); return; }
                   setStep('checkout');
                 }}
                 className="btn btn-primary btn-lg btn-full"
-                style={{ background: restaurant.brand_color }}
-                disabled={cart.length === 0}
+                style={{ background: !restaurant.is_open ? '#64748B' : restaurant.brand_color }}
+                disabled={cart.length === 0 || !restaurant.is_open}
                 id="btn-go-checkout"
               >
                 <ShoppingBag size={18} />
-                Continuar ({cartCount} items &mdash; S/ {cartTotal.toFixed(2)})
+                {!restaurant.is_open ? 'Restaurante Cerrado (Pedidos pausados)' : `Continuar (${cartCount} items — S/ ${cartTotal.toFixed(2)})`}
               </button>
             ) : (
               <button
                 onClick={handleSubmitOrder}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !restaurant.is_open}
                 className="btn btn-lg btn-full text-white font-bold"
-                style={{ background: '#15803D' }}
+                style={{ background: !restaurant.is_open ? '#64748B' : '#15803D' }}
                 id="btn-confirm-order"
               >
                 {isSubmitting ? (
                   <><Loader2 size={18} className="animate-spin" /> Procesando...</>
+                ) : !restaurant.is_open ? (
+                  <>Restaurante Cerrado</>
                 ) : (
                   <>Confirmar Pedido &mdash; S/ {cartTotal.toFixed(2)}</>
                 )}
@@ -763,13 +832,20 @@ export default function MenuClient({ restaurant, products }: MenuClientProps) {
                 <span>S/ {cartTotal.toFixed(2)}</span>
               </div>
               <button
-                onClick={() => { setIsCartOpen(false); setStep('checkout'); }}
+                onClick={() => {
+                  if (!restaurant.is_open) {
+                    toast.error('El restaurante está temporalmente cerrado. No se reciben pedidos.');
+                    return;
+                  }
+                  setIsCartOpen(false);
+                  setStep('checkout');
+                }}
                 className="btn btn-lg btn-full text-white font-bold"
-                style={{ background: '#15803D' }}
-                disabled={cart.length === 0}
+                style={{ background: !restaurant.is_open ? '#64748B' : '#15803D' }}
+                disabled={cart.length === 0 || !restaurant.is_open}
                 id="btn-cart-checkout"
               >
-                Continuar al Pago
+                {!restaurant.is_open ? 'Restaurante Cerrado' : 'Continuar al Pago'}
               </button>
             </div>
           </div>

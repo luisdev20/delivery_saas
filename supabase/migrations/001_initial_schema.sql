@@ -115,6 +115,7 @@ ALTER TABLE driver_locations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "pub_read_restaurants" ON restaurants FOR SELECT USING (true);
 CREATE POLICY "pub_read_products"    ON products    FOR SELECT USING (true);
 
+CREATE POLICY "admin_all_restaurants"     ON restaurants     FOR ALL USING (true);
 CREATE POLICY "admin_all_products"        ON products        FOR ALL USING (true);
 CREATE POLICY "admin_all_orders"          ON orders          FOR ALL USING (true);
 CREATE POLICY "admin_all_order_items"     ON order_items     FOR ALL USING (true);

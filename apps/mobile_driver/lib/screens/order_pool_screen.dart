@@ -22,6 +22,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
   List<OrderModel> _availableOrders = [];
   bool _isLoading = true;
   String? _restaurantName;
+  RealtimeChannel? _ordersChannel;
 
   @override
   void initState() {
@@ -32,6 +33,14 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
     _subscribeToOrders();
   }
 
+  @override
+  void dispose() {
+    if (_ordersChannel != null) {
+      _supabase.removeChannel(_ordersChannel!);
+    }
+    super.dispose();
+  }
+
   Future<void> _loadRestaurantInfo() async {
     try {
       final res = await _supabase
@@ -39,9 +48,11 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
           .select('name')
           .eq('id', widget.driver.restaurantId)
           .single();
-      setState(() {
-        _restaurantName = res['name'] as String?;
-      });
+      if (mounted) {
+        setState(() {
+          _restaurantName = res['name'] as String?;
+        });
+      }
     } catch (_) {}
   }
 
@@ -77,7 +88,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
   }
 
   Future<void> _loadPoolOrders() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final res = await _supabase
           .from('orders')
@@ -87,26 +98,28 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
           .order('created_at', ascending: false);
 
       final list = (res as List).map((e) => OrderModel.fromJson(e)).toList();
-      setState(() {
-        _availableOrders = list;
-      });
+      if (mounted) {
+        setState(() {
+          _availableOrders = list;
+        });
+      }
     } catch (_) {} finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _subscribeToOrders() {
-    _supabase
+    _ordersChannel = _supabase
         .channel('pool-orders')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
           callback: (payload) {
-            _loadPoolOrders();
+            if (mounted) _loadPoolOrders();
           },
-        )
-        .subscribe();
+        );
+    _ordersChannel?.subscribe();
   }
 
   Future<void> _acceptOrder(OrderModel order) async {

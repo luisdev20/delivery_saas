@@ -114,6 +114,14 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   }
 
   Future<void> _confirmDelivery() async {
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingrese el PIN de validación proporcionado por el cliente')),
+      );
+      return;
+    }
+
     final expectedPin = widget.order.orderNumber.toString().padLeft(4, '0');
     final shortExpected = widget.order.orderNumber.toString();
     if (pin != expectedPin && pin != shortExpected && pin != '1234') {
