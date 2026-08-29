@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import '../core/constants/app_colors.dart';
 import '../models/driver_model.dart';
 import '../models/order_model.dart';
@@ -33,7 +32,7 @@ class DeliverySuccessScreen extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  LucideIcons.checkCircle,
+                  Icons.check_circle_rounded,
                   size: 52,
                   color: Color(0xFF059669),
                 ),

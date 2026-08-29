@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import '../core/constants/app_colors.dart';
 import '../models/driver_model.dart';
 import 'order_pool_screen.dart';
@@ -111,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(LucideIcons.truck, size: 36, color: Colors.white),
+                  child: const Icon(Icons.local_shipping_rounded, size: 36, color: Colors.white),
                 ),
                 const SizedBox(height: 20),
                 const Text(
@@ -223,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(LucideIcons.logIn, size: 18),
+                              Icon(Icons.login_rounded, size: 18),
                               SizedBox(width: 8),
                               Text(
                                 'Ingresar a mi Turno',

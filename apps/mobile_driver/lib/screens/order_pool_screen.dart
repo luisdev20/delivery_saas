@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import '../core/constants/app_colors.dart';
 import '../models/driver_model.dart';
 import '../models/order_model.dart';
@@ -171,7 +170,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
                 color: AppColors.saas600,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(LucideIcons.truck, size: 18, color: Colors.white),
+              child: const Icon(Icons.local_shipping_rounded, size: 18, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Column(
@@ -198,7 +197,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.logOut, size: 20, color: Color(0xFFA5B4FC)),
+            icon: const Icon(Icons.logout_rounded, size: 20, color: Color(0xFFA5B4FC)),
             onPressed: _logout,
           ),
         ],
@@ -224,7 +223,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
                                 border: Border.all(color: AppColors.slate200),
                               ),
                               child: const Icon(
-                                LucideIcons.packageCheck,
+                                Icons.inventory_2_outlined,
                                 size: 48,
                                 color: AppColors.slate400,
                               ),
@@ -307,7 +306,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                const Icon(LucideIcons.store, size: 15, color: AppColors.slate500),
+                                const Icon(Icons.storefront_rounded, size: 16, color: AppColors.slate500),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -320,7 +319,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(LucideIcons.mapPin, size: 15, color: AppColors.brandRed),
+                                const Icon(Icons.location_on_rounded, size: 16, color: AppColors.brandRed),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -369,7 +368,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(LucideIcons.checkCircle2, size: 18),
+                                    Icon(Icons.check_circle_rounded, size: 18),
                                     SizedBox(width: 8),
                                     Text(
                                       'Aceptar Pedido (Asignarme)',

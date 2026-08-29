@@ -118,50 +118,91 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
   useEffect(() => {
     if (!driverLocation || !leafletMapRef.current) return;
     import('leaflet').then(L => {
+      const map = leafletMapRef.current as any;
+      if (!map) return;
+
+      const driverIcon = L.divIcon({
+        html: `<div style="
+          width:36px;height:36px;background:#4F46E5;border-radius:50%;
+          border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,0.35);
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+          </svg>
+        </div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        className: '',
+      });
+
       if (driverMarkerRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (driverMarkerRef.current as any).setLatLng([driverLocation.current_lat, driverLocation.current_lng]);
       } else {
-        const driverIcon = L.divIcon({
-          html: `<div style="width:28px;height:28px;background:#111827;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-          className: '',
-        });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         driverMarkerRef.current = L.marker(
           [driverLocation.current_lat, driverLocation.current_lng],
           { icon: driverIcon }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ).addTo(leafletMapRef.current as any);
+        ).addTo(map);
       }
-    });
-  }, [driverLocation]);
 
+      // Auto fit bounds so customer sees both the driver approaching and their destination
+      try {
+        map.fitBounds([
+          [driverLocation.current_lat, driverLocation.current_lng],
+          [currentOrder.delivery_lat, currentOrder.delivery_lng],
+        ], { padding: [60, 60], maxZoom: 16 });
+      } catch (_) {}
+    });
+  }, [driverLocation, currentOrder.delivery_lat, currentOrder.delivery_lng]);
+
+  // Subscribe to driver location updates
   useEffect(() => {
-    if (!order.driver_id) return;
+    const driverId = currentOrder.driver_id;
+    if (!driverId) return;
+
+    // Fetch latest known driver location immediately
+    supabase
+      .from('driver_locations')
+      .select('*')
+      .eq('driver_id', driverId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setDriverLocation(data as DriverLocation);
+      });
+
     const channel = supabase
-      .channel(`driver-loc-${order.driver_id}`)
+      .channel(`driver-loc-${driverId}`)
       .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'driver_locations',
-        filter: `driver_id=eq.${order.driver_id}`,
+        event: '*',
+        schema: 'public',
+        table: 'driver_locations',
+        filter: `driver_id=eq.${driverId}`,
       }, payload => {
-        setDriverLocation(prev => ({ ...prev, ...payload.new } as DriverLocation));
+        if (payload.new) {
+          setDriverLocation(payload.new as DriverLocation);
+        }
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [order.driver_id, supabase]);
 
+    return () => { supabase.removeChannel(channel); };
+  }, [currentOrder.driver_id, supabase]);
+
+  // Subscribe to order status and assignment changes
   useEffect(() => {
     const channel = supabase
       .channel(`order-status-${order.id}`)
       .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'orders',
+        event: '*',
+        schema: 'public',
+        table: 'orders',
         filter: `id=eq.${order.id}`,
       }, payload => {
-        setCurrentOrder(prev => ({ ...prev, ...payload.new }));
+        if (payload.new) {
+          setCurrentOrder(prev => ({ ...prev, ...payload.new }));
+        }
       })
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [order.id, supabase]);
 

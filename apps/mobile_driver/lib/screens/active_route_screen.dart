@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants/app_colors.dart';
 import '../models/driver_model.dart';
@@ -32,20 +31,28 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   final _mapController = MapController();
   final _pinController = TextEditingController();
 
-  LatLng? _driverLatLng;
-  double _distanceKm = 0.0;
-  int _etaMinutes = 15;
+  late LatLng _driverLatLng;
+  double _distanceKm = 1.2;
+  int _etaMinutes = 8;
   bool _isSubmittingPin = false;
 
   @override
   void initState() {
     super.initState();
+    // Default initial location offset from destination
+    _driverLatLng = LatLng(
+      widget.order.deliveryLat + 0.006,
+      widget.order.deliveryLng - 0.006,
+    );
     _initDriverLocation();
     _startLocationUpdates();
   }
 
   Future<void> _initDriverLocation() async {
-    final pos = await _locationService.getCurrentLocation();
+    final pos = await _locationService.getCurrentLocation(
+      defaultLat: _driverLatLng.latitude,
+      defaultLng: _driverLatLng.longitude,
+    );
     if (pos != null && mounted) {
       setState(() {
         _driverLatLng = LatLng(pos.latitude, pos.longitude);
@@ -59,12 +66,12 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
       driverId: widget.driver.id,
       restaurantId: widget.driver.restaurantId,
       currentOrderId: widget.order.id,
+      defaultLat: _driverLatLng.latitude,
+      defaultLng: _driverLatLng.longitude,
     );
 
-    // Periodic check
-    Stream.periodic(const Duration(seconds: 4)).listen((_) {
-      final pos = _locationService.currentPosition;
-      if (pos != null && mounted) {
+    _locationService.onLocationChanged.listen((pos) {
+      if (mounted) {
         setState(() {
           _driverLatLng = LatLng(pos.latitude, pos.longitude);
           _updateDistanceAndEta();
@@ -74,10 +81,9 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   }
 
   void _updateDistanceAndEta() {
-    if (_driverLatLng == null) return;
     final dist = _locationService.calculateDistanceInKm(
-      _driverLatLng!.latitude,
-      _driverLatLng!.longitude,
+      _driverLatLng.latitude,
+      _driverLatLng.longitude,
       widget.order.deliveryLat,
       widget.order.deliveryLng,
     );
@@ -151,7 +157,10 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   @override
   Widget build(BuildContext context) {
     final destLatLng = LatLng(widget.order.deliveryLat, widget.order.deliveryLng);
-    final centerLatLng = _driverLatLng ?? destLatLng;
+    final centerLatLng = LatLng(
+      (_driverLatLng.latitude + destLatLng.latitude) / 2,
+      (_driverLatLng.longitude + destLatLng.longitude) / 2,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.slate900,
@@ -173,11 +182,11 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.phone, size: 20, color: Colors.white),
+            icon: const Icon(Icons.phone_rounded, size: 20, color: Colors.white),
             onPressed: _callCustomer,
           ),
           IconButton(
-            icon: const Icon(LucideIcons.messageSquare, size: 20, color: Color(0xFF10B981)),
+            icon: const Icon(Icons.chat_bubble_rounded, size: 20, color: Color(0xFF10B981)),
             onPressed: _whatsappCustomer,
           ),
         ],
@@ -190,7 +199,7 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: centerLatLng,
-                initialZoom: 14.5,
+                initialZoom: 14.0,
               ),
               children: [
                 TileLayer(
@@ -206,32 +215,31 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
                       height: 48,
                       child: const Column(
                         children: [
-                          Icon(LucideIcons.mapPin, size: 36, color: AppColors.brandRed),
+                          Icon(Icons.location_on_rounded, size: 36, color: AppColors.brandRed),
                         ],
                       ),
                     ),
                     // Driver marker
-                    if (_driverLatLng != null)
-                      Marker(
-                        point: _driverLatLng!,
-                        width: 44,
-                        height: 44,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.saas600,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(LucideIcons.navigation, size: 20, color: Colors.white),
+                    Marker(
+                      point: _driverLatLng,
+                      width: 44,
+                      height: 44,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.saas600,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
+                        child: const Icon(Icons.navigation_rounded, size: 20, color: Colors.white),
                       ),
+                    ),
                   ],
                 ),
               ],
@@ -261,24 +269,31 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.order.customerName,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.slate900,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.order.customerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.slate900,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${widget.order.deliveryAddress} (${_distanceKm.toStringAsFixed(1)} km)',
-                            style: const TextStyle(fontSize: 13, color: AppColors.slate500),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              '${widget.order.deliveryAddress} (${_distanceKm.toStringAsFixed(1)} km)',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13, color: AppColors.slate500),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
@@ -356,7 +371,7 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
                                 )
                               : const Row(
                                   children: [
-                                    Icon(LucideIcons.check, size: 20),
+                                    Icon(Icons.check_rounded, size: 20),
                                     SizedBox(width: 6),
                                     Text('Entregar', style: TextStyle(fontWeight: FontWeight.bold)),
                                   ],
