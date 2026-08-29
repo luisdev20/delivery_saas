@@ -10,6 +10,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+  const supabase = await createClient();
   let { data: restaurant } = await supabase
     .from('restaurants')
     .select('name, address')
