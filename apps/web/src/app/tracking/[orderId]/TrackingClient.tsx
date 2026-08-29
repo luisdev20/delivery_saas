@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { Order, DriverLocation, Restaurant } from '@/lib/supabase/types';
-import { MapPin, Package, Truck, CheckCircle, Clock, Phone } from 'lucide-react';
+import { MapPin, Package, Truck, CheckCircle, Clock, Phone, ShieldCheck } from 'lucide-react';
 
 interface Props {
   order: Order;
@@ -198,7 +198,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
         filter: `id=eq.${order.id}`,
       }, payload => {
         if (payload.new) {
-          setCurrentOrder(prev => ({ ...prev, ...payload.new }));
+          setCurrentOrder((prev: Order) => ({ ...prev, ...(payload.new as Partial<Order>) }));
         }
       })
       .subscribe();
@@ -281,6 +281,28 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
                 </div>
               );
             })}
+          </div>
+
+          {/* Security PIN for Delivery */}
+          <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/80 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <span className="text-xs font-black text-amber-900 tracking-wider uppercase block">
+                  PIN de Entrega Segura
+                </span>
+                <p className="text-[11px] text-amber-700 leading-tight mt-0.5">
+                  Dicta este código al repartidor al recibir tu pedido
+                </p>
+              </div>
+            </div>
+            <div className="bg-white border-2 border-amber-400 px-3.5 py-1.5 rounded-xl shadow-xs text-center flex-shrink-0">
+              <span className="font-mono text-xl font-black tracking-widest text-amber-950">
+                {order.order_number.toString().padStart(4, '0')}
+              </span>
+            </div>
           </div>
 
           {/* Delivery info */}
