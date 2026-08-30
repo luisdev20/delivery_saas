@@ -53,7 +53,8 @@ La aplicación estará corriendo en **`http://localhost:3000`**.
 | Ruta | Descripción | Acceso |
 |---|---|:---:|
 | **`/login`** | Portal de acceso para administradores del restaurante. | Público (solicitar credenciales al líder) |
-| **`/admin`** | Panel de control unificado: Despachos, Gestión de Flota, Cocina KDS y Menú. | Protegido (requiere login) |
+| **`/admin`** | Panel de control unificado: Despachos, Gestión de Flota y Menú. | Protegido (requiere login) |
+| **`/kds/rincon-criollo`** | **Monitor de Cocina KDS:** Pantalla táctil en tiempo real exclusiva para cocina. | Acceso libre / Pantalla dedicada |
 | **`/p/rincon-criollo`** | Tienda pública del restaurante de prueba para armar pedidos y checkout. | Público |
 | **`/tracking/[orderId]`** | Pantalla de seguimiento en vivo con mapa interactivo y estados en tiempo real. | Público |
 

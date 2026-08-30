@@ -33,8 +33,9 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   PLIN: 'Plin',
 };
 
-export default function MenuClient({ restaurant: initialRestaurant, products }: MenuClientProps) {
+export default function MenuClient({ restaurant: initialRestaurant, products: initialProducts }: MenuClientProps) {
   const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant>(initialRestaurant);
+  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [step, setStep] = useState<CheckoutStep>('home');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -44,10 +45,14 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Sync when initialRestaurant prop changes
+  // Sync when initial props change
   useEffect(() => {
     setCurrentRestaurant(initialRestaurant);
   }, [initialRestaurant]);
+
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
 
   // Realtime subscription for restaurant updates (e.g. is_open toggle)
   useEffect(() => {
@@ -69,6 +74,36 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
     return () => { supabase.removeChannel(channel); };
   }, [initialRestaurant.id]);
 
+  // Realtime subscription for products table (instant dish activation/deactivation/updates)
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-products-${initialRestaurant.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'products',
+        filter: `restaurant_id=eq.${initialRestaurant.id}`,
+      }, payload => {
+        if (payload.eventType === 'INSERT') {
+          const inserted = payload.new as Product;
+          setProducts(prev => {
+            if (prev.some(p => p.id === inserted.id)) return prev;
+            return [...prev, inserted];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = payload.new as Product;
+          setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string }).id;
+          setProducts(prev => prev.filter(p => p.id !== deletedId));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [initialRestaurant.id]);
+
   const restaurant = currentRestaurant;
 
   const [form, setForm] = useState<OrderForm>({
@@ -81,13 +116,27 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
     notes: '',
   });
 
+  // Calculate day of week (1=Monday ... 7=Sunday)
+  const todayIso = useMemo(() => {
+    const d = new Date().getDay();
+    return d === 0 ? 7 : d;
+  }, []);
+
+  // Filter products by available_days (if empty/null, always available)
+  const activeDayProducts = useMemo(() => {
+    return products.filter(p => {
+      if (!p.available_days || p.available_days.length === 0) return true;
+      return p.available_days.includes(todayIso);
+    });
+  }, [products, todayIso]);
+
   const grouped = useMemo(() => {
-    return products.reduce<Record<string, Product[]>>((acc, p) => {
+    return activeDayProducts.reduce<Record<string, Product[]>>((acc, p) => {
       if (!acc[p.category]) acc[p.category] = [];
       acc[p.category].push(p);
       return acc;
     }, {});
-  }, [products]);
+  }, [activeDayProducts]);
 
   const categories = Object.keys(grouped);
 
@@ -333,45 +382,45 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
     <div style={{ fontFamily: 'Inter, sans-serif', background: '#F9FAFB', minHeight: '100vh' }}>
 
       {/* ===== HEADER ===== */}
-      <header className="bg-white sticky top-0 z-40 shadow-sm" style={{ borderBottom: '1px solid var(--gray-200)' }}>
-        <div className="max-w-[1300px] mx-auto px-6 lg:px-12 h-[75px] flex items-center justify-between">
+      <header className="bg-white sticky top-0 z-40 shadow-xs" style={{ borderBottom: '1px solid var(--gray-200)' }}>
+        <div className="max-w-[1300px] mx-auto px-4 sm:px-6 lg:px-12 h-[62px] sm:h-[75px] flex items-center justify-between">
 
-          {/* Logo */}
-          <div className="flex items-center gap-3">
+          {/* Logo & Name */}
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {step !== 'home' && (
               <button
                 onClick={() => setStep(step === 'category' ? 'home' : 'category')}
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm p-1.5 sm:p-2 shrink-0"
                 id="btn-back"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={18} />
               </button>
             )}
             {restaurant.logo_url ? (
               <Image
                 src={restaurant.logo_url}
                 alt={restaurant.name}
-                width={42}
-                height={42}
-                className="rounded-full object-cover"
+                width={36}
+                height={36}
+                className="rounded-full object-cover shrink-0 w-9 h-9 sm:w-11 sm:h-11"
                 style={{ border: `2px solid ${restaurant.brand_color}` }}
               />
             ) : (
               <div
-                className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shrink-0"
                 style={{ background: restaurant.brand_color }}
               >
                 {restaurant.name[0]}
               </div>
             )}
-            <div>
-              <p className="font-bold text-sm leading-tight" style={{ color: 'var(--text-primary)' }}>
+            <div className="min-w-0">
+              <p className="font-bold text-xs sm:text-sm leading-tight truncate max-w-[160px] xs:max-w-[220px] sm:max-w-none" style={{ color: 'var(--text-primary)' }}>
                 {restaurant.name}
               </p>
-              <div className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${restaurant.is_open ? 'bg-green-500' : 'bg-red-400'} pulse-dot`} />
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {restaurant.is_open ? 'Abierto' : 'Cerrado'}
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${restaurant.is_open ? 'bg-emerald-500' : 'bg-red-400'} pulse-dot`} />
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {restaurant.is_open ? 'Abierto ahora' : 'Cerrado'}
                 </span>
               </div>
             </div>
@@ -380,16 +429,16 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           {/* Cart button */}
           <button
             onClick={() => setIsCartOpen(true)}
-            className="flex items-center gap-2 cursor-pointer relative group"
+            className="flex items-center gap-2 cursor-pointer relative group p-2"
             id="cart-button"
           >
-            <ShoppingBag size={22} style={{ color: restaurant.brand_color }} className="group-hover:scale-110 transition-transform" />
-            <span className="text-sm font-bold uppercase tracking-wider hidden sm:block" style={{ color: 'var(--text-secondary)' }}>
+            <ShoppingBag size={20} style={{ color: restaurant.brand_color }} className="group-hover:scale-110 transition-transform" />
+            <span className="text-xs sm:text-sm font-bold uppercase tracking-wider hidden sm:block" style={{ color: 'var(--text-secondary)' }}>
               Mi Pedido
             </span>
             {cartCount > 0 && (
               <span
-                className="absolute -top-1.5 -left-1.5 w-4 h-4 text-[10px] font-bold rounded-full flex items-center justify-center text-black"
+                className="absolute -top-1 -right-1 sm:-left-1.5 w-4 h-4 text-[10px] font-bold rounded-full flex items-center justify-center text-black"
                 style={{ background: 'var(--brand-accent)' }}
               >
                 {cartCount}
@@ -401,20 +450,22 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
 
       {/* Closed Store Alert Banner */}
       {!restaurant.is_open && (
-        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 text-amber-900 sticky top-[73px] z-30 shadow-xs">
-          <div className="max-w-[1300px] mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0 animate-ping" />
-              <p className="text-xs sm:text-sm font-semibold">
-                <strong className="text-amber-950">Restaurante Cerrado Temporalmente:</strong> En este momento no estamos recibiendo pedidos en línea. Puedes explorar el menú.
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 text-amber-900 sticky top-[62px] sm:top-[75px] z-30 shadow-xs">
+          <div className="max-w-[1300px] mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 animate-ping" />
+              <p className="text-xs sm:text-sm font-semibold leading-tight">
+                <strong className="text-amber-950">Restaurante Cerrado:</strong> No estamos recibiendo pedidos en línea en este momento.
               </p>
             </div>
-            <a
-              href={`tel:${restaurant.phone}`}
-              className="text-xs font-bold text-amber-900 underline hover:text-amber-950 hidden sm:inline"
-            >
-              Llamar: {restaurant.phone}
-            </a>
+            {restaurant.phone && (
+              <a
+                href={`tel:${restaurant.phone}`}
+                className="text-xs font-bold text-amber-900 underline hover:text-amber-950 hidden sm:inline shrink-0"
+              >
+                Llamar: {restaurant.phone}
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -424,8 +475,8 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
         <>
           {/* Hero */}
           <section
-            className="relative w-full flex items-center"
-            style={{ height: '320px', background: '#1a1a2e' }}
+            className="relative w-full flex items-center h-[200px] sm:h-[300px]"
+            style={{ background: '#1a1a2e' }}
           >
             {restaurant.cover_image_url && (
               <Image
@@ -438,39 +489,43 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
             )}
             <div
               className="absolute inset-0"
-              style={{ background: 'linear-gradient(to right, transparent 40%, rgba(0,0,0,0.75))' }}
+              style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.85) 100%)' }}
             />
-            <div className="relative max-w-[1300px] w-full mx-auto px-6 lg:px-12 flex justify-end">
-              <div className="text-right">
-                <p className="text-sm uppercase tracking-widest mb-2" style={{ color: restaurant.brand_color }}>
-                  {restaurant.is_open ? 'Abierto ahora' : 'Cerrado'}
+            <div className="relative max-w-[1300px] w-full mx-auto px-4 sm:px-6 lg:px-12 flex justify-end">
+              <div className="text-right max-w-lg">
+                <p className="text-xs sm:text-sm uppercase tracking-widest mb-1.5 font-bold" style={{ color: restaurant.brand_color }}>
+                  {restaurant.is_open ? '● Abierto ahora' : '○ Cerrado temporalmente'}
                 </p>
-                <h2 className="text-white text-5xl font-black uppercase leading-none mb-4 drop-shadow-lg">
+                <h2 className="text-white text-2xl sm:text-4xl lg:text-5xl font-black uppercase leading-tight mb-2 drop-shadow-lg">
                   {restaurant.name}
                 </h2>
-                <p className="text-white/70 text-sm">{restaurant.address}</p>
+                {restaurant.address && (
+                  <p className="text-white/80 text-xs sm:text-sm truncate">{restaurant.address}</p>
+                )}
               </div>
             </div>
           </section>
 
           {/* Category grid */}
-          <section className="max-w-[1300px] mx-auto px-6 lg:px-12 py-12 pb-28">
+          <section className="max-w-[1300px] mx-auto px-4 sm:px-6 lg:px-12 py-8 sm:py-12 pb-28">
             {categories.length === 0 ? (
               <div className="text-center py-16">
                 <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>No hay platos disponibles hoy</p>
-                <a href={`tel:${restaurant.phone}`} className="btn btn-primary mt-4" style={{ background: restaurant.brand_color }}>
-                  <Phone size={16} /> {restaurant.phone}
-                </a>
+                {restaurant.phone && (
+                  <a href={`tel:${restaurant.phone}`} className="btn btn-primary mt-4" style={{ background: restaurant.brand_color }}>
+                    <Phone size={16} /> {restaurant.phone}
+                  </a>
+                )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
                 {categories.map(cat => {
                   const sample = grouped[cat].find(p => p.image_url)?.image_url;
                   return (
                     <button
                       key={cat}
                       onClick={() => { setActiveCategory(cat); setStep('category'); }}
-                      className="relative h-64 rounded-2xl overflow-hidden group text-left shadow-sm hover:shadow-xl transition-all"
+                      className="relative h-44 sm:h-64 rounded-xl sm:rounded-2xl overflow-hidden group text-left shadow-xs hover:shadow-xl transition-all"
                       style={{ background: '#1a1a1a' }}
                       id={`cat-${cat.toLowerCase().replace(/\s+/g, '-')}`}
                     >
@@ -481,9 +536,9 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
                         <div style={{ background: `${restaurant.brand_color}40` }} className="absolute inset-0" />
                       )}
                       <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%)' }} />
-                      <div className="absolute bottom-6 left-6 right-6">
-                        <h3 className="text-white text-xl font-bold uppercase tracking-wide">{cat}</h3>
-                        <p className="text-white/60 text-sm">{grouped[cat].length} platos</p>
+                      <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 right-4 sm:right-6">
+                        <h3 className="text-white text-lg sm:text-xl font-bold uppercase tracking-wide">{cat}</h3>
+                        <p className="text-white/70 text-xs sm:text-sm">{grouped[cat].length} {grouped[cat].length === 1 ? 'plato' : 'platos'}</p>
                       </div>
                     </button>
                   );
@@ -494,7 +549,7 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
 
           {/* Footer */}
           <footer className="border-t-4 py-8 px-6 text-center" style={{ background: '#1a1a1a', borderColor: restaurant.brand_color }}>
-            <div className="max-w-[1300px] mx-auto flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500 gap-2">
+            <div className="max-w-[1300px] mx-auto flex flex-col sm:flex-row justify-between items-center text-xs text-gray-400 gap-2">
               <p>&copy; {new Date().getFullYear()} {restaurant.name} &mdash; Todos los derechos reservados.</p>
               <p>Powered by Delivery Tracker SaaS</p>
             </div>
@@ -504,23 +559,43 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
 
       {/* ===== CATEGORY VIEW ===== */}
       {step === 'category' && activeCategory && (
-        <div className="max-w-[1300px] mx-auto px-6 lg:px-12 py-10 pb-32">
-          <h2 className="text-3xl font-black uppercase text-center tracking-wider mb-8" style={{ color: 'var(--text-primary)' }}>
+        <div className="max-w-[1300px] mx-auto px-4 sm:px-6 lg:px-12 py-6 sm:py-10 pb-32">
+          {/* Category Chips Navigator */}
+          <div className="flex gap-2 overflow-x-auto pb-3 mb-6 no-scrollbar">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                  activeCategory === cat
+                    ? 'text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+                style={activeCategory === cat ? { background: restaurant.brand_color } : {}}
+              >
+                {cat} ({grouped[cat]?.length || 0})
+              </button>
+            ))}
+          </div>
+
+          <h2 className="text-xl sm:text-3xl font-black uppercase text-center tracking-wider mb-6 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
             {activeCategory}
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-5">
             {categoryItems.map(product => {
               const cartItem = cart.find(i => i.product.id === product.id);
               return (
                 <div
                   key={product.id}
-                  className="bg-white rounded-2xl border overflow-hidden flex flex-col animate-fade-in"
-                  style={{ borderColor: 'var(--gray-100)', boxShadow: 'var(--shadow-sm)', transition: 'box-shadow 0.2s' }}
-                  onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
-                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'var(--shadow-sm)')}
+                  className="bg-white rounded-xl sm:rounded-2xl border overflow-hidden flex flex-col animate-fade-in transition-all"
+                  style={{
+                    borderColor: 'var(--gray-100)',
+                    boxShadow: 'var(--shadow-sm)',
+                    opacity: product.is_available ? 1 : 0.65,
+                  }}
                 >
-                  <div className="h-44 overflow-hidden bg-gray-100 relative">
+                  <div className="h-36 sm:h-44 overflow-hidden bg-gray-100 relative">
                     {product.image_url ? (
                       <Image
                         src={product.image_url}
@@ -530,53 +605,68 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center" style={{ background: `${restaurant.brand_color}15` }}>
-                        <span className="text-4xl font-black" style={{ color: `${restaurant.brand_color}40` }}>
+                        <span className="text-3xl sm:text-4xl font-black" style={{ color: `${restaurant.brand_color}40` }}>
                           {product.name[0]}
                         </span>
                       </div>
                     )}
+                    {!product.is_available && (
+                      <span className="absolute top-2.5 right-2.5 bg-slate-900/80 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-xs backdrop-blur-xs">
+                        Agotado
+                      </span>
+                    )}
                   </div>
-                  <div className="p-5 flex flex-col flex-1">
-                    <h4 className="font-bold text-base leading-tight mb-1" style={{ color: 'var(--text-primary)' }}>
-                      {product.name}
-                    </h4>
+                  <div className="p-3.5 sm:p-5 flex flex-col flex-1">
+                    <div className="flex items-start justify-between gap-1.5 mb-1">
+                      <h4 className="font-bold text-sm sm:text-base leading-tight" style={{ color: 'var(--text-primary)' }}>
+                        {product.name}
+                      </h4>
+                      {!product.is_available && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
+                          Agotado
+                        </span>
+                      )}
+                    </div>
                     {product.description && (
-                      <p className="text-xs mb-3 line-clamp-2 flex-1" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-xs mb-3 line-clamp-2 flex-1 text-slate-500">
                         {product.description}
                       </p>
                     )}
-                    <div className="flex items-end justify-between mt-auto">
-                      <span className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>
+                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
+                      <span className="text-base sm:text-xl font-black" style={{ color: 'var(--text-primary)' }}>
                         S/ {product.price.toFixed(2)}
                       </span>
-                      {cartItem ? (
-                        <div className="flex items-center gap-2">
+                      {!product.is_available ? (
+                        <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 border border-slate-200">
+                          Agotado
+                        </span>
+                      ) : cartItem ? (
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                           <button
                             onClick={() => updateQuantity(product.id, -1)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
-                            style={{ borderColor: 'var(--border-color)' }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center border border-slate-200 text-slate-700 active:bg-slate-100"
                             id={`decrease-${product.id}`}
                           >
-                            <Minus size={13} />
+                            <Minus size={12} />
                           </button>
-                          <span className="font-bold w-5 text-center text-sm">{cartItem.quantity}</span>
+                          <span className="font-bold w-4 text-center text-xs sm:text-sm">{cartItem.quantity}</span>
                           <button
                             onClick={() => updateQuantity(product.id, 1)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-white transition-colors"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-white active:opacity-90"
                             style={{ background: restaurant.brand_color }}
                             id={`increase-${product.id}`}
                           >
-                            <Plus size={13} />
+                            <Plus size={12} />
                           </button>
                         </div>
                       ) : (
                         <button
                           onClick={() => addToCart(product)}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors"
+                          className="flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold text-white active:scale-95 transition-all shadow-xs"
                           style={{ background: restaurant.brand_color }}
                           id={`add-${product.id}`}
                         >
-                          <Plus size={14} /> Agregar
+                          <Plus size={13} /> Agregar
                         </button>
                       )}
                     </div>
@@ -588,18 +678,37 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
         </div>
       )}
 
+      {/* Floating Bottom Cart Bar on Mobile */}
+      {cartCount > 0 && !isCartOpen && step !== 'checkout' && (
+        <div className="fixed bottom-4 inset-x-3.5 z-40 sm:hidden animate-slide-up">
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="w-full py-3 px-4 rounded-2xl text-white font-bold flex items-center justify-between shadow-xl active:scale-[0.98] transition-all"
+            style={{ background: restaurant.brand_color }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white/25 text-white font-black text-xs flex items-center justify-center">
+                {cartCount}
+              </span>
+              <span className="text-xs font-semibold">Ver mi pedido</span>
+            </div>
+            <span className="text-xs font-black">S/ {cartTotal.toFixed(2)} →</span>
+          </button>
+        </div>
+      )}
+
       {/* ===== CHECKOUT VIEW ===== */}
       {step === 'checkout' && (
-        <div className="max-w-xl mx-auto px-6 py-8 pb-32 space-y-5 animate-fade-in">
-          <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => setStep('category')} className="btn btn-ghost btn-sm">
+        <div className="max-w-xl mx-auto px-3.5 sm:px-6 py-4 sm:py-8 pb-32 space-y-4 sm:space-y-5 animate-fade-in">
+          <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4">
+            <button onClick={() => setStep('category')} className="btn btn-ghost btn-sm p-1.5 sm:p-2 text-xs sm:text-sm">
               <ArrowLeft size={16} /> Volver
             </button>
-            <h2 className="font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Datos de entrega</h2>
+            <h2 className="font-bold text-lg sm:text-xl" style={{ color: 'var(--text-primary)' }}>Datos de entrega</h2>
           </div>
 
           {!restaurant.is_open && (
-            <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-center shadow-xs">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-center shadow-xs">
               <span className="text-xs font-black uppercase tracking-wider block text-amber-950 mb-1">
                 Restaurante Cerrado
               </span>
@@ -610,18 +719,18 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           )}
 
           {/* Order summary */}
-          <div className="card p-4">
-            <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
+          <div className="card p-3.5 sm:p-4">
+            <h3 className="font-semibold mb-2.5 text-xs sm:text-sm" style={{ color: 'var(--text-primary)' }}>
               Pedido ({cartCount} items)
             </h3>
             <div className="space-y-2">
               {cart.map(item => (
-                <div key={item.product.id} className="flex justify-between text-sm">
+                <div key={item.product.id} className="flex justify-between text-xs sm:text-sm">
                   <span style={{ color: 'var(--text-secondary)' }}>{item.quantity}x {item.product.name}</span>
                   <span className="font-medium">S/ {(item.product.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
-              <div className="border-t pt-2 flex justify-between font-bold text-sm" style={{ borderColor: 'var(--border-color)' }}>
+              <div className="border-t pt-2 flex justify-between font-bold text-xs sm:text-sm" style={{ borderColor: 'var(--border-color)' }}>
                 <span>Total</span>
                 <span style={{ color: restaurant.brand_color }}>S/ {cartTotal.toFixed(2)}</span>
               </div>
@@ -629,8 +738,8 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           </div>
 
           {/* Personal data */}
-          <div className="card p-4 space-y-4">
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Datos personales</h3>
+          <div className="card p-3.5 sm:p-4 space-y-3.5 sm:space-y-4">
+            <h3 className="font-semibold text-xs sm:text-sm" style={{ color: 'var(--text-primary)' }}>Datos personales</h3>
             <div className="form-group">
               <label className="form-label">Nombre completo *</label>
               <input className="form-input" placeholder="Ej. Juan Garcia" value={form.customer_name}
@@ -644,10 +753,10 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           </div>
 
           {/* Address */}
-          <div className="card p-4 space-y-4">
+          <div className="card p-3.5 sm:p-4 space-y-3.5 sm:space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Dirección de entrega</h3>
-              <span className="text-xs text-slate-400 font-medium">Manual o GPS</span>
+              <h3 className="font-semibold text-xs sm:text-sm" style={{ color: 'var(--text-primary)' }}>Dirección de entrega</h3>
+              <span className="text-[11px] text-slate-400 font-medium">Manual o GPS</span>
             </div>
 
             <div className="form-group">
@@ -665,15 +774,15 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
               type="button"
               onClick={getGPSLocation}
               disabled={isLocating}
-              className="btn btn-secondary w-full text-xs font-semibold py-2.5 flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-100 transition-colors"
+              className="btn btn-secondary w-full text-[11px] sm:text-xs font-semibold py-2 sm:py-2.5 flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-100 transition-colors"
               id="btn-gps"
             >
               {isLocating ? (
-                <><Loader2 size={15} className="animate-spin" /> Obteniendo coordenadas y dirección...</>
+                <><Loader2 size={14} className="animate-spin" /> Obteniendo coordenadas y dirección...</>
               ) : (
                 <>
-                  <MapPin size={15} style={{ color: location ? '#10B981' : restaurant.brand_color }} />
-                  {location ? 'Ubicación GPS sincronizada (Clic para recalcular)' : 'Autocompletar dirección con mi GPS actual (Opcional)'}
+                  <MapPin size={14} style={{ color: location ? '#10B981' : restaurant.brand_color }} />
+                  {location ? 'Ubicación GPS sincronizada' : 'Autocompletar con mi GPS actual'}
                 </>
               )}
             </button>
@@ -698,12 +807,12 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           </div>
 
           {/* Payment */}
-          <div className="card p-4 space-y-4">
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Método de pago</h3>
+          <div className="card p-3.5 sm:p-4 space-y-3.5 sm:space-y-4">
+            <h3 className="font-semibold text-xs sm:text-sm" style={{ color: 'var(--text-primary)' }}>Método de pago</h3>
             <div className="grid grid-cols-3 gap-2">
               {(['EFECTIVO', 'YAPE', 'PLIN'] as PaymentMethod[]).map(method => (
                 <button key={method} onClick={() => setForm(f => ({ ...f, payment_method: method }))}
-                  className="p-3 rounded-xl border-2 text-center transition-all text-sm font-medium"
+                  className="p-2.5 sm:p-3 rounded-xl border-2 text-center transition-all text-xs sm:text-sm font-bold"
                   style={{
                     borderColor: form.payment_method === method ? restaurant.brand_color : 'var(--border-color)',
                     background: form.payment_method === method ? `${restaurant.brand_color}10` : 'white',
@@ -725,7 +834,7 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
           </div>
 
           {/* Notes */}
-          <div className="card p-4">
+          <div className="card p-3.5 sm:p-4">
             <div className="form-group">
               <label className="form-label">Notas adicionales (opcional)</label>
               <textarea className="form-input" rows={2} placeholder="Instrucciones especiales"
@@ -737,7 +846,7 @@ export default function MenuClient({ restaurant: initialRestaurant, products }: 
 
       {/* ===== BOTTOM CTA ===== */}
       {(step === 'category' || step === 'checkout') && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 border-t"
+        <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 border-t z-30"
           style={{ background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderColor: 'var(--border-color)' }}>
           <div className="max-w-5xl mx-auto">
             {step === 'category' ? (

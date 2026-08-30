@@ -34,8 +34,15 @@ const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
   CANCELADO:      '',
 };
 
-type AdminTab = 'dashboard' | 'fleet' | 'kitchen' | 'menu';
+type AdminTab = 'dashboard' | 'fleet' | 'menu';
 type FilterTab = 'active' | 'delivered' | 'all';
+
+interface SidebarNavItem {
+  id: AdminTab;
+  icon: React.ReactNode;
+  label: string;
+  badge?: number;
+}
 
 const DAYS = [
   { num: 1, label: 'L' },
@@ -405,9 +412,8 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
   };
 
   const sidebarNavItems = [
-    { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Dashboard', badge: activeCount },
+    { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Dashboard Despachos' },
     { id: 'fleet',     icon: <Users size={18} />,     label: 'Gestión de Flota', badge: drivers.filter(d => d.is_active).length },
-    { id: 'kitchen',   icon: <ChefHat size={18} />,   label: 'Monitor Cocina (KDS)', badge: kdsNuevos.length + kdsPrep.length },
     { id: 'menu',      icon: <UtensilsCrossed size={18} />, label: 'Menú del Restaurante' },
   ];
 
@@ -457,6 +463,25 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               </button>
             );
           })}
+
+          {/* Dedicated KDS Kitchen Monitor Link */}
+          <div className="pt-2">
+            <a
+              href={`/kds/${restaurant.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg text-xs font-bold transition-all border border-amber-500/30 group"
+              id="btn-open-kds-screen"
+            >
+              <div className="flex items-center gap-2">
+                <ChefHat size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
+                <span>Pantalla Cocina KDS</span>
+              </div>
+              <span className="text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded text-amber-200">
+                Abrir ↗
+              </span>
+            </a>
+          </div>
         </nav>
 
         {/* Store Status Toggle */}
@@ -520,62 +545,67 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
         {/* ================= TAB 1: DASHBOARD (DESPACHOS) ================= */}
         {adminTab === 'dashboard' && (
-          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
             {/* Header */}
-            <header className="flex justify-between items-center mb-8">
+            <header className="flex justify-between items-center mb-4 sm:mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800">Monitor de Despachos</h2>
-                <p className="text-slate-500 text-sm mt-0.5">Control operativo en tiempo real</p>
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Monitor de Despachos</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control operativo en tiempo real</p>
               </div>
-              <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
                 Sincronización en vivo
               </div>
             </header>
 
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-                  <ShoppingBag size={24} />
+            {/* Stat Cards (3-Column compact on mobile, spacious on desktop) */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-4 sm:mb-8">
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-indigo-50 sm:bg-indigo-100 rounded-lg sm:rounded-full flex items-center justify-center text-indigo-600 shrink-0">
+                  <ShoppingBag size={14} className="sm:hidden" />
+                  <ShoppingBag size={22} className="hidden sm:block" />
                 </div>
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">Envíos Hoy</p>
-                  <p className="text-2xl font-bold text-slate-800">{todayCount}</p>
-                </div>
-              </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
-                  <Truck size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">En Ruta</p>
-                  <p className="text-2xl font-bold text-slate-800">{enRutaCount}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">Envíos Hoy</p>
+                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{todayCount}</p>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
-                  <Timer size={24} />
+
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-amber-50 sm:bg-amber-100 rounded-lg sm:rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                  <Truck size={14} className="sm:hidden" />
+                  <Truck size={22} className="hidden sm:block" />
                 </div>
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">Activos</p>
-                  <p className="text-2xl font-bold text-slate-800">{activeCount}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">En Ruta</p>
+                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{enRutaCount}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-emerald-50 sm:bg-emerald-100 rounded-lg sm:rounded-full flex items-center justify-center text-emerald-600 shrink-0">
+                  <Timer size={14} className="sm:hidden" />
+                  <Timer size={22} className="hidden sm:block" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">Activos</p>
+                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{activeCount}</p>
                 </div>
               </div>
             </div>
 
-            {/* Orders Table Container */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+            {/* Orders Container */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mb-6">
               {/* Filter Tabs */}
-              <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
-                <div className="flex gap-2">
+              <div className="p-2.5 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex gap-1.5 sm:gap-2">
                   {([['active', 'Activas', activeCount], ['delivered', 'Entregadas', null], ['all', 'Todas', null]] as const).map(([tab, label, count]) => (
                     <button
                       key={tab}
                       onClick={() => setActiveFilter(tab)}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                         activeFilter === tab
-                          ? 'bg-indigo-600 text-white shadow-sm'
+                          ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -583,13 +613,94 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                     </button>
                   ))}
                 </div>
-                <span className="text-xs text-slate-400 font-medium">
-                  Mostrando {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}
+                <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                  {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}
                 </span>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto">
+              {/* Mobile View: Cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {filteredOrders.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-xs">
+                    {activeFilter === 'active' ? 'No hay órdenes activas en este momento' : 'No hay órdenes en esta vista'}
+                  </div>
+                ) : (
+                  filteredOrders.map(order => (
+                    <div
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="p-3.5 hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer space-y-2.5"
+                    >
+                      {/* Card Top: Number, Time & Status */}
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="font-bold text-slate-900 text-sm">#{order.order_number}</span>
+                          <span className="text-[10px] text-slate-400 font-normal ml-2">{timeAgo(order.created_at)}</span>
+                        </div>
+                        <span className={`badge badge-${order.status} text-[10px] px-2 py-0.5`}>
+                          {STATUS_CONFIG[order.status].icon}
+                          {STATUS_CONFIG[order.status].label}
+                        </span>
+                      </div>
+
+                      {/* Card Mid: Customer & Driver */}
+                      <div className="flex justify-between items-center text-xs">
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-800 block truncate">{order.customer_name}</span>
+                          <span className="text-[11px] text-slate-400">{order.customer_phone}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-slate-900 block">S/ {order.total_amount.toFixed(2)}</span>
+                          <span className="text-[10px] text-slate-400">{order.payment_method}</span>
+                        </div>
+                      </div>
+
+                      {/* Card Bottom: Action Buttons */}
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 gap-2" onClick={e => e.stopPropagation()}>
+                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                          {order.driver ? (
+                            <span className="inline-flex items-center gap-1 text-slate-700 font-medium">
+                              <Truck size={11} className="text-indigo-600 shrink-0" /> {(order.driver as Driver).name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[10px]">Sin asignar</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {['EN_CAMINO', 'LISTO'].includes(order.status) && (
+                            <button
+                              onClick={() => setTrackingDrawerOrder(order)}
+                              className="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-2.5 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                              id={`track-m-${order.order_number}`}
+                            >
+                              <MapPin size={11} /> Rastrear
+                            </button>
+                          )}
+                          {STATUS_CONFIG[order.status].next && (
+                            <button
+                              onClick={() => advanceStatus(order)}
+                              disabled={updatingId === order.id}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded text-xs font-bold transition-colors"
+                            >
+                              {updatingId === order.id ? '...' : STATUS_NEXT_LABEL[order.status]}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded text-xs font-semibold"
+                          >
+                            Ver
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop View: Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-600">
                   <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200">
                     <tr>
@@ -682,22 +793,68 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
         {/* ================= TAB 2: FLEET (GESTIÓN DE FLOTA) ================= */}
         {adminTab === 'fleet' && (
-          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
-            <header className="flex justify-between items-center mb-8">
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <header className="flex justify-between items-center mb-4 sm:mb-8">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800">Gestión de Flota</h2>
-                <p className="text-slate-500 text-sm mt-0.5">Control de repartidores y accesos a la App Móvil</p>
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Flota</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y accesos a la App Móvil</p>
               </div>
               <button
                 onClick={() => setShowDriverModal(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 sm:gap-2 transition-colors"
                 id="btn-new-driver"
               >
-                <Plus size={16} /> Nuevo Repartidor
+                <Plus size={15} /> Nuevo Repartidor
               </button>
             </header>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Mobile Driver Cards */}
+            <div className="md:hidden space-y-3 mb-6">
+              {drivers.length === 0 ? (
+                <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-xs">
+                  No hay repartidores registrados.
+                </div>
+              ) : (
+                drivers.map(driver => (
+                  <div key={driver.id} className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-xs space-y-2.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-slate-800 text-sm">{driver.name}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        driver.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {driver.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs">
+                      <a
+                        href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-emerald-600 font-medium flex items-center gap-1 hover:underline text-xs"
+                      >
+                        <Phone size={12} /> {driver.phone}
+                      </a>
+                      <span className="text-[11px] text-slate-400">
+                        {new Date(driver.created_at).toLocaleDateString('es-PE')}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex justify-end">
+                      <button
+                        onClick={() => handleToggleDriver(driver)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-100 transition-colors"
+                      >
+                        {driver.is_active ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Driver Table */}
+            <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <table className="w-full text-left text-sm text-slate-600">
                 <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
@@ -760,176 +917,43 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
           </div>
         )}
 
-        {/* ================= TAB 3: KITCHEN (MONITOR COCINA - KDS) ================= */}
-        {adminTab === 'kitchen' && (
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
-            <header className="px-8 py-6 bg-white border-b border-slate-200 flex justify-between items-center shrink-0">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800">Monitor de Cocina (KDS)</h2>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {kdsNuevos.length} nuevos &middot; {kdsPrep.length} en preparación &middot; {kdsListos.length} listos
-                </p>
-              </div>
-            </header>
-
-            {/* Kanban Grid */}
-            <div className="flex-1 p-8 flex gap-6 overflow-x-auto min-h-0">
-              {/* Columna 1: Nuevos */}
-              <div className="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                <div className="bg-slate-50 p-4 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
-                  <span>1. Nuevos (Pagados)</span>
-                  <span className="bg-slate-200 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                    {kdsNuevos.length}
-                  </span>
-                </div>
-                <div className="p-4 flex-1 overflow-y-auto space-y-4">
-                  {kdsNuevos.length === 0 && (
-                    <p className="text-xs text-center text-slate-400 py-12">Sin pedidos nuevos</p>
-                  )}
-                  {kdsNuevos.map(order => (
-                    <div key={order.id} className="bg-white border-2 border-slate-200 rounded-lg p-4 shadow-sm animate-fade-in">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-black text-lg text-slate-800">#{order.order_number}</span>
-                        <span className="text-xs font-bold text-slate-500">{timeAgo(order.created_at)}</span>
-                      </div>
-                      {order.order_items && (
-                        <ul className="text-sm text-slate-600 mb-4 list-disc pl-4 space-y-1 font-medium">
-                          {order.order_items.map(i => (
-                            <li key={i.id}>{i.quantity}x {i.product_name}</li>
-                          ))}
-                        </ul>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => advanceStatus(order)}
-                          disabled={updatingId === order.id}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-xs transition-colors"
-                        >
-                          {updatingId === order.id ? '...' : 'Preparar'}
-                        </button>
-                        <button
-                          onClick={() => cancelOrder(order.id)}
-                          className="px-3 bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded text-xs transition-colors"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Columna 2: En Preparación */}
-              <div className="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                <div className="bg-blue-50 p-4 border-b border-blue-100 font-bold text-blue-800 flex justify-between items-center">
-                  <span>2. En Preparación</span>
-                  <span className="bg-blue-200 text-blue-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                    {kdsPrep.length}
-                  </span>
-                </div>
-                <div className="p-4 flex-1 overflow-y-auto bg-blue-50/20 space-y-4">
-                  {kdsPrep.length === 0 && (
-                    <p className="text-xs text-center text-slate-400 py-12">Vacío</p>
-                  )}
-                  {kdsPrep.map(order => (
-                    <div key={order.id} className="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm animate-fade-in">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-black text-lg text-slate-800">#{order.order_number}</span>
-                        <span className="text-xs font-bold text-amber-600">{timeAgo(order.created_at)}</span>
-                      </div>
-                      {order.order_items && (
-                        <ul className="text-sm text-slate-600 mb-4 list-disc pl-4 space-y-1 font-medium">
-                          {order.order_items.map(i => (
-                            <li key={i.id}>{i.quantity}x {i.product_name}</li>
-                          ))}
-                        </ul>
-                      )}
-                      <button
-                        onClick={() => advanceStatus(order)}
-                        disabled={updatingId === order.id}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs transition-colors shadow-sm"
-                      >
-                        {updatingId === order.id ? '...' : 'Marcar como Listo'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Columna 3: Listos */}
-              <div className="w-[320px] shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                <div className="bg-emerald-50 p-4 border-b border-emerald-100 font-bold text-emerald-800 flex justify-between items-center">
-                  <span>3. Listos (Bolsa de Entrega)</span>
-                  <span className="bg-emerald-200 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                    {kdsListos.length}
-                  </span>
-                </div>
-                <div className="p-4 flex-1 overflow-y-auto bg-emerald-50/20 space-y-4">
-                  {kdsListos.length === 0 && (
-                    <p className="text-xs text-center text-slate-400 py-12">Vacío</p>
-                  )}
-                  {kdsListos.map(order => (
-                    <div key={order.id} className="bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm animate-fade-in">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-black text-lg text-slate-800">#{order.order_number}</span>
-                        <span className="text-xs font-bold text-emerald-600">{timeAgo(order.created_at)}</span>
-                      </div>
-                      {order.order_items && (
-                        <ul className="text-sm text-slate-600 mb-4 list-disc pl-4 space-y-1 font-medium">
-                          {order.order_items.map(i => (
-                            <li key={i.id}>{i.quantity}x {i.product_name}</li>
-                          ))}
-                        </ul>
-                      )}
-                      <div className="text-xs font-bold py-2 rounded text-center flex items-center justify-center gap-1.5 uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot" />
-                        Esperando Repartidor
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 4: MENU (GESTIÓN DE MENÚ) ================= */}
+        {/* ================= TAB 3: MENU (GESTIÓN DE MENÚ) ================= */}
         {adminTab === 'menu' && (
-          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
-            <header className="flex justify-between items-center mb-8">
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <header className="flex justify-between items-center mb-4 sm:mb-8">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800">Gestión de Menú</h2>
-                <p className="text-slate-500 text-sm mt-0.5">
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Menú</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
                   {products.length} {products.length === 1 ? 'plato registrado' : 'platos registrados'} en la carta
                 </p>
               </div>
               <button
                 onClick={() => { setEditingProduct(emptyProductForm()); setIsNewProduct(true); }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 sm:gap-2 transition-colors"
                 id="btn-new-product"
               >
-                <Plus size={16} /> Nuevo Plato
+                <Plus size={15} /> Nuevo Plato
               </button>
             </header>
 
             {Object.keys(groupedProducts).length === 0 ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
-                <p className="font-semibold text-slate-700">No hay productos en el menú</p>
-                <p className="text-sm text-slate-400 mt-1 mb-4">Agregue su primer plato para empezar a vender</p>
+              <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
+                <p className="font-semibold text-slate-700 text-sm">No hay productos en el menú</p>
+                <p className="text-xs text-slate-400 mt-1 mb-4">Agregue su primer plato para empezar a vender</p>
                 <button
                   onClick={() => { setEditingProduct(emptyProductForm()); setIsNewProduct(true); }}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                  className="bg-indigo-600 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
                 >
-                  <Plus size={16} className="inline mr-1" /> Agregar primer plato
+                  <Plus size={14} className="inline mr-1" /> Agregar primer plato
                 </button>
               </div>
             ) : (
               Object.entries(groupedProducts).map(([category, items]) => (
-                <section key={category} className="mb-8">
-                  <h3 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                <section key={category} className="mb-6 sm:mb-8">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
                     {category} <span className="font-normal text-slate-400">({items.length})</span>
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {items.map(product => (
                       <div
                         key={product.id}
@@ -1007,17 +1031,17 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         <>
           <div className="drawer-overlay" onClick={() => setSelectedOrder(null)} />
           <div className="drawer-panel animate-slide-in">
-            <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
+            <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
               <div>
-                <h3 className="font-bold text-xl text-slate-800">Orden #{selectedOrder.order_number}</h3>
+                <h3 className="font-bold text-lg sm:text-xl text-slate-800">Orden #{selectedOrder.order_number}</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{new Date(selectedOrder.created_at).toLocaleString('es-PE')}</p>
               </div>
-              <button onClick={() => setSelectedOrder(null)} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60">
-                <X size={20} />
+              <button onClick={() => setSelectedOrder(null)} className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60">
+                <X size={18} />
               </button>
             </div>
 
-            <div className="flex-1 p-6 overflow-y-auto space-y-6">
+            <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
               {/* Status Action */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                 <div className="flex justify-between items-center">
@@ -1118,19 +1142,19 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         <>
           <div className="drawer-overlay" onClick={() => setTrackingDrawerOrder(null)} />
           <div className="drawer-panel animate-slide-in">
-            <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
+            <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
               <div>
-                <h3 className="font-bold text-lg text-slate-800">Rastreo #{trackingDrawerOrder.order_number}</h3>
+                <h3 className="font-bold text-base sm:text-lg text-slate-800">Rastreo #{trackingDrawerOrder.order_number}</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{trackingDrawerOrder.customer_name}</p>
               </div>
-              <button onClick={() => setTrackingDrawerOrder(null)} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg">
-                <X size={20} />
+              <button onClick={() => setTrackingDrawerOrder(null)} className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 rounded-lg">
+                <X size={18} />
               </button>
             </div>
 
-            <div ref={trackingMapRef} className="w-full" style={{ height: '260px' }} id="drawer-tracking-map" />
+            <div ref={trackingMapRef} className="w-full" style={{ height: '240px' }} id="drawer-tracking-map" />
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Bitácora Operativa</h4>
               <div className="relative pl-6 space-y-6 border-l-2 border-slate-200">
                 {['RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO'].map(s => {
@@ -1157,7 +1181,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               {trackingDrawerOrder.status === 'EN_CAMINO' && (
                 <button
                   onClick={() => sendTrackingLink(trackingDrawerOrder)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 sm:py-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <MessageSquare size={15} /> Enviar tracking por WhatsApp
                 </button>
@@ -1169,15 +1193,15 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
       {/* ================= MODAL: NUEVO REPARTIDOR ================= */}
       {showDriverModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-6">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-8 shadow-2xl space-y-4 sm:space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-800">Registrar Repartidor</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-slate-800">Registrar Repartidor</h3>
               <button onClick={() => setShowDriverModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateDriver} className="space-y-4">
+            <form onSubmit={handleCreateDriver} className="space-y-3.5 sm:space-y-4">
               <div className="form-group">
                 <label className="form-label">Nombre Completo</label>
                 <input
@@ -1199,18 +1223,18 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                   required
                 />
               </div>
-              <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowDriverModal(false)}
-                  className="btn btn-secondary flex-1"
+                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingDriver}
-                  className="btn btn-indigo flex-1"
+                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
                 >
                   {savingDriver ? 'Guardando...' : 'Registrar'}
                 </button>
@@ -1222,14 +1246,14 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
       {/* ================= MODAL: EDITAR / NUEVO PLATO ================= */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-800">
+              <h3 className="text-lg sm:text-xl font-bold text-slate-800">
                 {isNewProduct ? 'Nuevo Plato' : 'Editar Plato'}
               </h3>
               <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
             <div className="space-y-4">

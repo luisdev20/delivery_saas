@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import type { Restaurant, Product } from '@/lib/supabase/types';
-import MenuClient from './MenuClient';
+import type { Restaurant, Order } from '@/lib/supabase/types';
+import KdsClient from './KdsClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = await createClient();
   let { data: restaurant } = await supabase
     .from('restaurants')
-    .select('name, address')
+    .select('name')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -24,22 +24,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const normalized = slug.replace(/^el-/, '');
     const { data: fallback } = await supabase
       .from('restaurants')
-      .select('name, address')
+      .select('name')
       .ilike('slug', `%${normalized}%`)
       .limit(1)
       .maybeSingle();
     restaurant = fallback;
   }
 
-  if (!restaurant) return { title: 'Restaurante no encontrado' };
+  if (!restaurant) return { title: 'Monitor KDS' };
 
   return {
-    title: `Menú - ${restaurant.name}`,
-    description: `Pide directamente desde ${restaurant.name}. Entrega a domicilio en ${restaurant.address}.`,
+    title: `KDS Cocina - ${restaurant.name}`,
+    description: `Pantalla de cocina en tiempo real para ${restaurant.name}`,
   };
 }
 
-export default async function MenuPage({ params }: Props) {
+export default async function KdsPage({ params }: Props) {
   const { slug } = await params;
   const supabase = await createClient();
 
@@ -50,7 +50,6 @@ export default async function MenuPage({ params }: Props) {
     .maybeSingle();
 
   if (!restaurant) {
-    // Try matching normalized slug without 'el-' or find by name/ilike
     const normalized = slug.replace(/^el-/, '');
     const { data: fallback } = await supabase
       .from('restaurants')
@@ -61,23 +60,20 @@ export default async function MenuPage({ params }: Props) {
     restaurant = fallback;
   }
 
-  if (!restaurant) {
-    notFound();
-  }
+  if (!restaurant) notFound();
 
-  const rest = restaurant as Restaurant;
-
-  const { data: products } = await supabase
-    .from('products')
-    .select('*')
-    .eq('restaurant_id', rest.id)
-    .order('sort_order', { ascending: true })
-    .order('category', { ascending: true });
+  // Load active orders for KDS (RECIBIDO, EN_PREPARACION, LISTO)
+  const { data: initialOrders } = await supabase
+    .from('orders')
+    .select('*, order_items(*)')
+    .eq('restaurant_id', restaurant.id)
+    .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO'])
+    .order('created_at', { ascending: true });
 
   return (
-    <MenuClient
-      restaurant={rest}
-      products={(products as Product[]) || []}
+    <KdsClient
+      restaurant={restaurant as Restaurant}
+      initialOrders={(initialOrders || []) as Order[]}
     />
   );
 }
