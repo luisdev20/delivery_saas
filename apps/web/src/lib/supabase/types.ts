@@ -1,7 +1,33 @@
-export type OrderStatus = 'RECIBIDO' | 'EN_PREPARACION' | 'LISTO' | 'EN_CAMINO' | 'ENTREGADO' | 'CANCELADO';
-export type PaymentMethod = 'EFECTIVO' | 'YAPE' | 'PLIN';
+export type OrderStatus =
+  | 'RECIBIDO'
+  | 'EN_PREPARACION'
+  | 'LISTO_PARA_ENTREGA'
+  | 'ASIGNADO'
+  | 'EN_CAMINO'
+  | 'ENTREGADO'
+  | 'CANCELADO';
+
+export type PaymentMethod = 'EFECTIVO' | 'YAPE' | 'PLIN' | 'PAGADO_ORIGEN';
 export type PlanType = 'STARTER' | 'GROWTH' | 'ENTERPRISE';
 export type UserRole = 'superadmin' | 'owner' | 'manager';
+export type BusinessType = 'RESTAURANTE' | 'FARMACIA' | 'RETAIL' | 'LOGISTICA_GENERAL' | 'OTRO';
+
+export type CancellationReason =
+  | 'QUIEBRE_STOCK'
+  | 'DIRECCION_INVALIDA'
+  | 'CLIENTE_CANCELO'
+  | 'FUERA_DE_COBERTURA'
+  | 'TIEMPO_EXCEDIDO'
+  | 'OTRO';
+
+export const CANCELLATION_REASONS: Record<CancellationReason, string> = {
+  QUIEBRE_STOCK: 'Quiebre de stock / Producto no disponible',
+  DIRECCION_INVALIDA: 'Dirección de entrega inválida o inalcanzable',
+  CLIENTE_CANCELO: 'El cliente solicitó cancelación del pedido',
+  FUERA_DE_COBERTURA: 'Ubicación fuera del radio de entrega',
+  TIEMPO_EXCEDIDO: 'Capacidad operativa excedida',
+  OTRO: 'Otro motivo logístico',
+};
 
 export interface Restaurant {
   id: string;
@@ -12,6 +38,7 @@ export interface Restaurant {
   lat: number | null;
   lng: number | null;
   max_delivery_radius_km: number;
+  business_type?: BusinessType;
   logo_url: string | null;
   cover_image_url: string | null;
   brand_color: string;
@@ -69,6 +96,10 @@ export interface Order {
   restaurant_id: string;
   driver_id: string | null;
   order_number: number;
+  pin_code: string;
+  external_order_id: string | null;
+  origin_system: string | null;
+  cancellation_reason: string | null;
   customer_name: string;
   customer_phone: string;
   delivery_address: string;
@@ -80,7 +111,10 @@ export interface Order {
   cash_amount_change: number | null;
   total_amount: number;
   notes: string | null;
+  package_notes: string | null;
   created_at: string;
+  assigned_at: string | null;
+  in_route_at: string | null;
   delivered_at: string | null;
   driver?: Driver;
   order_items?: OrderItem[];
@@ -110,9 +144,19 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface MerchantApiKey {
+  id: string;
+  restaurant_id: string;
+  key_prefix: string;
+  name: string;
+  is_active: boolean;
+  last_used_at: string | null;
+  created_at: string;
+}
+
 /* Plan limits reference */
 export const PLAN_LIMITS: Record<PlanType, { label: string; maxDrivers: number; maxOrders: number; price: number }> = {
-  STARTER:    { label: 'Starter',    maxDrivers: 2,  maxOrders: 300,   price: 99 },
-  GROWTH:     { label: 'Growth',     maxDrivers: 6,  maxOrders: 1200,  price: 199 },
+  STARTER:    { label: 'Starter',    maxDrivers: 2,  maxOrders: 300,    price: 99 },
+  GROWTH:     { label: 'Growth',     maxDrivers: 6,  maxOrders: 1200,   price: 199 },
   ENTERPRISE: { label: 'Enterprise', maxDrivers: 999, maxOrders: 999999, price: 399 },
 };
