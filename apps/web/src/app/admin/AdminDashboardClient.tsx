@@ -1158,6 +1158,224 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
           </div>
         )}
 
+        {/* ================= TAB 4: METRICS ================= */}
+        {adminTab === 'metrics' && (
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Métricas y Rendimiento</h2>
+                <p className="text-sm text-slate-500">Análisis operativo del restaurante</p>
+              </div>
+              {/* Range selector */}
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                {([['today', 'Hoy'], ['7days', '7 días'], ['month', 'Este mes'], ['last_month', 'Mes anterior']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setMetricsRange(key)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      metricsRange === key
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >{label}</button>
+                ))}
+              </div>
+            </header>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              {[
+                { label: 'Pedidos', value: metricsData.totalOrders, icon: <ShoppingBag size={20} />, color: '#4F46E5', bg: '#EEF2FF' },
+                { label: 'Ingresos', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={20} />, color: '#059669', bg: '#ECFDF5' },
+                { label: 'Tiempo promedio', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={20} />, color: '#D97706', bg: '#FFFBEB' },
+                { label: 'Tasa de éxito', value: `${metricsData.successRate}%`, icon: <Target size={20} />, color: '#7C3AED', bg: '#F5F3FF' },
+              ].map(kpi => (
+                <div key={kpi.label} className="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: kpi.bg, color: kpi.color }}>
+                      {kpi.icon}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{kpi.label}</span>
+                  </div>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-800">{kpi.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+              {/* Delivery stats summary */}
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+                <h3 className="font-bold text-sm text-slate-700 mb-4">Resumen de Pedidos</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Entregados', count: metricsData.deliveredCount, color: '#059669', pct: metricsData.totalOrders ? Math.round((metricsData.deliveredCount / metricsData.totalOrders) * 100) : 0 },
+                    { label: 'Cancelados', count: metricsData.cancelledCount, color: '#DC2626', pct: metricsData.totalOrders ? Math.round((metricsData.cancelledCount / metricsData.totalOrders) * 100) : 0 },
+                    { label: 'En proceso', count: metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount, color: '#D97706', pct: metricsData.totalOrders ? Math.round(((metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount) / metricsData.totalOrders) * 100) : 0 },
+                  ].map(s => (
+                    <div key={s.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-slate-600">{s.label}</span>
+                        <span className="font-bold text-slate-800">{s.count} ({s.pct}%)</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment methods */}
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+                <h3 className="font-bold text-sm text-slate-700 mb-4">Distribución de Pagos</h3>
+                <div className="space-y-4">
+                  {[
+                    { method: 'EFECTIVO', label: 'Efectivo', color: '#059669', icon: '💵' },
+                    { method: 'YAPE', label: 'Yape', color: '#7C3AED', icon: '📱' },
+                    { method: 'PLIN', label: 'Plin', color: '#2563EB', icon: '📲' },
+                  ].map(pm => {
+                    const count = metricsData.paymentCounts[pm.method] || 0;
+                    const pct = Math.round((count / metricsData.paymentTotal) * 100);
+                    return (
+                      <div key={pm.method}>
+                        <div className="flex justify-between items-center text-xs mb-1.5">
+                          <span className="font-medium text-slate-600 flex items-center gap-1.5">
+                            <span className="text-sm">{pm.icon}</span> {pm.label}
+                          </span>
+                          <span className="font-bold text-slate-800">{count} pedidos ({pct}%)</span>
+                        </div>
+                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: pm.color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Driver Performance */}
+            {metricsData.driverStats.length > 0 && (
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 mb-6">
+                <h3 className="font-bold text-sm text-slate-700 mb-4">Rendimiento por Repartidor</h3>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Repartidor</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Entregados</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Tiempo Prom.</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Cancelados</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metricsData.driverStats.map(s => (
+                        <tr key={s.driver.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                          <td className="py-2.5 px-3 font-medium text-slate-800 flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+                              {s.driver.name.charAt(0)}
+                            </div>
+                            {s.driver.name}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-xs">{s.deliveredCount}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-slate-600">{s.avgTime} min</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${s.cancelledCount > 0 ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-400'}`}>{s.cancelledCount}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {s.driver.is_active ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3">
+                  {metricsData.driverStats.map(s => (
+                    <div key={s.driver.id} className="bg-slate-50 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+                            {s.driver.name.charAt(0)}
+                          </div>
+                          <span className="font-semibold text-sm text-slate-800">{s.driver.name}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {s.driver.is_active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div><p className="text-lg font-bold text-emerald-600">{s.deliveredCount}</p><p className="text-[10px] text-slate-500">Entregados</p></div>
+                        <div><p className="text-lg font-bold text-amber-600">{s.avgTime}m</p><p className="text-[10px] text-slate-500">Tiempo prom.</p></div>
+                        <div><p className="text-lg font-bold text-red-500">{s.cancelledCount}</p><p className="text-[10px] text-slate-500">Cancelados</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Plan Consumption */}
+            {subscription && (
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan</h3>
+                  <span className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
+                    subscription.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
+                    subscription.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-indigo-100 text-indigo-700'
+                  }`}>{PLAN_LIMITS[subscription.plan]?.label || subscription.plan}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Orders consumption */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-slate-500">Pedidos este mes</span>
+                      <span className="font-bold text-slate-700">{subscription.orders_this_month} / {subscription.max_orders_per_month === 999999 ? 'Ilimitados' : subscription.max_orders_per_month}</span>
+                    </div>
+                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min((subscription.orders_this_month / subscription.max_orders_per_month) * 100, 100)}%`,
+                          backgroundColor: (subscription.orders_this_month / subscription.max_orders_per_month) > 0.9 ? '#DC2626' : (subscription.orders_this_month / subscription.max_orders_per_month) > 0.7 ? '#D97706' : '#4F46E5',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* Drivers consumption */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-slate-500">Repartidores activos</span>
+                      <span className="font-bold text-slate-700">{drivers.filter(d => d.is_active).length} / {subscription.max_drivers >= 999 ? 'Ilimitados' : subscription.max_drivers}</span>
+                    </div>
+                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min((drivers.filter(d => d.is_active).length / subscription.max_drivers) * 100, 100)}%`,
+                          backgroundColor: '#4F46E5',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+                  <span>Tarifa: <strong className="text-slate-700">S/ {PLAN_LIMITS[subscription.plan]?.price || '---'}/mes</strong></span>
+                  <span>Ciclo inicio: <strong className="text-slate-700">{new Date(subscription.billing_cycle_start).toLocaleDateString('es-PE')}</strong></span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
 
       {/* ================= ORDER DETAIL DRAWER ================= */}
@@ -1485,224 +1703,6 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
           </div>
         </div>
       )}
-
-        {/* ================= TAB 4: METRICS ================= */}
-        {adminTab === 'metrics' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Métricas y Rendimiento</h2>
-                <p className="text-sm text-slate-500">Análisis operativo del restaurante</p>
-              </div>
-              {/* Range selector */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                {([['today', 'Hoy'], ['7days', '7 días'], ['month', 'Este mes'], ['last_month', 'Mes anterior']] as const).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setMetricsRange(key)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                      metricsRange === key
-                        ? 'bg-white text-indigo-700 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >{label}</button>
-                ))}
-              </div>
-            </header>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              {[
-                { label: 'Pedidos', value: metricsData.totalOrders, icon: <ShoppingBag size={20} />, color: '#4F46E5', bg: '#EEF2FF' },
-                { label: 'Ingresos', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={20} />, color: '#059669', bg: '#ECFDF5' },
-                { label: 'Tiempo promedio', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={20} />, color: '#D97706', bg: '#FFFBEB' },
-                { label: 'Tasa de éxito', value: `${metricsData.successRate}%`, icon: <Target size={20} />, color: '#7C3AED', bg: '#F5F3FF' },
-              ].map(kpi => (
-                <div key={kpi.label} className="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: kpi.bg, color: kpi.color }}>
-                      {kpi.icon}
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{kpi.label}</span>
-                  </div>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-800">{kpi.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-              {/* Delivery stats summary */}
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Resumen de Pedidos</h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Entregados', count: metricsData.deliveredCount, color: '#059669', pct: metricsData.totalOrders ? Math.round((metricsData.deliveredCount / metricsData.totalOrders) * 100) : 0 },
-                    { label: 'Cancelados', count: metricsData.cancelledCount, color: '#DC2626', pct: metricsData.totalOrders ? Math.round((metricsData.cancelledCount / metricsData.totalOrders) * 100) : 0 },
-                    { label: 'En proceso', count: metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount, color: '#D97706', pct: metricsData.totalOrders ? Math.round(((metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount) / metricsData.totalOrders) * 100) : 0 },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-slate-600">{s.label}</span>
-                        <span className="font-bold text-slate-800">{s.count} ({s.pct}%)</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Payment methods */}
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Distribución de Pagos</h3>
-                <div className="space-y-4">
-                  {[
-                    { method: 'EFECTIVO', label: 'Efectivo', color: '#059669', icon: '💵' },
-                    { method: 'YAPE', label: 'Yape', color: '#7C3AED', icon: '📱' },
-                    { method: 'PLIN', label: 'Plin', color: '#2563EB', icon: '📲' },
-                  ].map(pm => {
-                    const count = metricsData.paymentCounts[pm.method] || 0;
-                    const pct = Math.round((count / metricsData.paymentTotal) * 100);
-                    return (
-                      <div key={pm.method}>
-                        <div className="flex justify-between items-center text-xs mb-1.5">
-                          <span className="font-medium text-slate-600 flex items-center gap-1.5">
-                            <span className="text-sm">{pm.icon}</span> {pm.label}
-                          </span>
-                          <span className="font-bold text-slate-800">{count} pedidos ({pct}%)</span>
-                        </div>
-                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: pm.color }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Driver Performance */}
-            {metricsData.driverStats.length > 0 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 mb-6">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Rendimiento por Repartidor</h3>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="text-left py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Repartidor</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Entregados</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Tiempo Prom.</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Cancelados</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metricsData.driverStats.map(s => (
-                        <tr key={s.driver.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                          <td className="py-2.5 px-3 font-medium text-slate-800 flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
-                              {s.driver.name.charAt(0)}
-                            </div>
-                            {s.driver.name}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-xs">{s.deliveredCount}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-slate-600">{s.avgTime} min</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${s.cancelledCount > 0 ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-400'}`}>{s.cancelledCount}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                              {s.driver.is_active ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-3">
-                  {metricsData.driverStats.map(s => (
-                    <div key={s.driver.id} className="bg-slate-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
-                            {s.driver.name.charAt(0)}
-                          </div>
-                          <span className="font-semibold text-sm text-slate-800">{s.driver.name}</span>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {s.driver.is_active ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div><p className="text-lg font-bold text-emerald-600">{s.deliveredCount}</p><p className="text-[10px] text-slate-500">Entregados</p></div>
-                        <div><p className="text-lg font-bold text-amber-600">{s.avgTime}m</p><p className="text-[10px] text-slate-500">Tiempo prom.</p></div>
-                        <div><p className="text-lg font-bold text-red-500">{s.cancelledCount}</p><p className="text-[10px] text-slate-500">Cancelados</p></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Plan Consumption */}
-            {subscription && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan</h3>
-                  <span className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
-                    subscription.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
-                    subscription.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
-                    'bg-indigo-100 text-indigo-700'
-                  }`}>{PLAN_LIMITS[subscription.plan]?.label || subscription.plan}</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Orders consumption */}
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Pedidos este mes</span>
-                      <span className="font-bold text-slate-700">{subscription.orders_this_month} / {subscription.max_orders_per_month === 999999 ? 'Ilimitados' : subscription.max_orders_per_month}</span>
-                    </div>
-                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${Math.min((subscription.orders_this_month / subscription.max_orders_per_month) * 100, 100)}%`,
-                          backgroundColor: (subscription.orders_this_month / subscription.max_orders_per_month) > 0.9 ? '#DC2626' : (subscription.orders_this_month / subscription.max_orders_per_month) > 0.7 ? '#D97706' : '#4F46E5',
-                        }}
-                      />
-                    </div>
-                  </div>
-                  {/* Drivers consumption */}
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Repartidores activos</span>
-                      <span className="font-bold text-slate-700">{drivers.filter(d => d.is_active).length} / {subscription.max_drivers >= 999 ? 'Ilimitados' : subscription.max_drivers}</span>
-                    </div>
-                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${Math.min((drivers.filter(d => d.is_active).length / subscription.max_drivers) * 100, 100)}%`,
-                          backgroundColor: '#4F46E5',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-                  <span>Tarifa: <strong className="text-slate-700">S/ {PLAN_LIMITS[subscription.plan]?.price || '---'}/mes</strong></span>
-                  <span>Ciclo inicio: <strong className="text-slate-700">{new Date(subscription.billing_cycle_start).toLocaleDateString('es-PE')}</strong></span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
     </div>
   );
