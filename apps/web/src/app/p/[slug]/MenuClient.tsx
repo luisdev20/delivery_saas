@@ -304,6 +304,26 @@ export default function MenuClient({ restaurant: initialRestaurant, products: in
         finalLng = geocoded.lng;
       }
 
+      // Validar radio máximo de delivery
+      if (currentRestaurant.lat && currentRestaurant.lng && currentRestaurant.max_delivery_radius_km) {
+        const toRad = (n: number) => (n * Math.PI) / 180;
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = toRad(finalLat - currentRestaurant.lat);
+        const dLng = toRad(finalLng - currentRestaurant.lng);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(currentRestaurant.lat)) * Math.cos(toRad(finalLat)) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (distKm > currentRestaurant.max_delivery_radius_km) {
+          toast.error(
+            `Esta dirección está fuera de nuestra zona de reparto (máx. ${currentRestaurant.max_delivery_radius_km} km). Distancia: ${distKm.toFixed(1)} km.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
