@@ -94,7 +94,7 @@ class _OrderPoolScreenState extends State<OrderPoolScreen> {
           .from('orders')
           .select('*, order_items(*)')
           .eq('restaurant_id', widget.driver.restaurantId)
-          .eq('status', 'LISTO')
+          .inFilter('status', ['LISTO_PARA_ENTREGA', 'ASIGNADO', 'LISTO'])
           .order('created_at', ascending: false);
 
       final list = (res as List).map((e) => OrderModel.fromJson(e)).toList();

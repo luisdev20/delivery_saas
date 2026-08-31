@@ -122,13 +122,12 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
       return;
     }
 
-    final expectedPin = widget.order.orderNumber.toString().padLeft(4, '0');
-    final shortExpected = widget.order.orderNumber.toString();
-    if (pin != expectedPin && pin != shortExpected && pin != '1234') {
+    final expectedPin = widget.order.pinCode;
+    if (pin != expectedPin && pin != '1234') {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('PIN incorrecto. Solicite al cliente el código de su pantalla (#$expectedPin).'),
-          backgroundColor: const Color(0xFFDC2626),
+        const SnackBar(
+          content: Text('PIN incorrecto. Solicite al cliente el código de 4 dígitos mostrado en su pantalla de seguimiento.'),
+          backgroundColor: Color(0xFFDC2626),
         ),
       );
       return;

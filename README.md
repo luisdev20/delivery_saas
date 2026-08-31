@@ -1,16 +1,37 @@
-# Delivery Tracker SaaS
+# Delivery Tracker — Motor Logístico B2B SaaS (DaaS)
 
-Plataforma B2B para restaurantes y negocios gastronómicos que permite gestionar pedidos, monitorear la cocina en tiempo real (KDS), administrar la flota de repartidores y ofrecer seguimiento GPS en vivo a los clientes finales.
+**Delivery Tracker** es una plataforma tecnológica B2B bajo el modelo **SaaS / DaaS (Delivery as a Service)** diseñada para resolver la gestión logística de última milla. Actúa como un motor de despachos agnóstico que permite a comercios de cualquier rubro (restaurantes, farmacias, retail, repuestos, ferreterías) externalizar y digitalizar el rastreo satelital de sus envíos utilizando su propia flota de repartidores.
 
 ---
 
-## Guía Rápida de Inicio para el Equipo
+## Principios de la Arquitectura DaaS
 
-Sigue estos 3 pasos para levantar el proyecto en tu máquina local conectado a la base de datos compartida de desarrollo:
+1. **Agnosticidad de Dominio:** Aísla la logística de la venta. Despacha cualquier tipo de paquete o requerimiento sin acoplarse a catálogos ni recetas.
+2. **Integración Plug & Play vía API REST B2B:** Los comercios envían requerimientos de entrega consumiendo `POST /api/v1/orders` con su `x-api-key`.
+3. **Máquina de Estados Estricta (7 Estados):**
+   * `RECIBIDO` ➔ `EN_PREPARACION` ➔ `LISTO_PARA_ENTREGA` ➔ `ASIGNADO` ➔ `EN_CAMINO` ➔ `ENTREGADO` (+ `CANCELADO` estructurado).
+4. **Validación Anti-Fraude con PIN de 4 Dígitos:** Cada orden genera un código PIN aleatorio; la entrega solo concluye cuando el destinatario proporciona su PIN al repartidor.
+
+---
+
+## Rutas Principales de la Plataforma
+
+| Ruta / Endpoint | Tipo | Descripción |
+|---|:---:|---|
+| **`POST /api/v1/orders`** | `API B2B` | Crear requerimiento de despacho (requiere cabecera `x-api-key`). |
+| **`GET /api/v1/orders/[id]`** | `API B2B` | Consultar estado, telemetría GPS del motorizado y bitácora. |
+| **`POST /api/v1/orders/[id]/cancel`** | `API B2B` | Cancelación estructurada con motivo (`QUIEBRE_STOCK`, etc.). |
+| **`POST /api/v1/keys`** | `API` | Generación de tokens de acceso B2B (`dtk_live_...`). |
+| **`/admin`** | `Web UI` | Consola de Despacho DaaS, Flota, Gestión de API Keys y Métricas. |
+| **`/kds/[slug]`** | `Web UI` | Tablero de Empaque y Preparación en tiempo real para centros de fulfillment. |
+| **`/tracking/[orderId]`** | `Web UI` | Pantalla de seguimiento satelital para el cliente con PIN de seguridad. |
+| **`/onboarding`** | `Web UI` | Alta de nuevos comercios multi-tenant (super-admin). |
+
+---
+
+## Guía Rápida de Inicio para Desarrolladores
 
 ### 1. Clonar el repositorio e instalar dependencias
-
-Abre tu terminal y ejecuta:
 
 ```bash
 git clone https://github.com/luisdev20/delivery_saas.git
@@ -18,46 +39,52 @@ cd delivery_saas
 npm install
 ```
 
----
-
 ### 2. Configurar Variables de Entorno
 
-El proyecto ya cuenta con una base de datos centralizada en Supabase con todas las tablas, usuarios y productos de prueba configurados.
-
-1. **Solicita el archivo `.env.local` al líder del proyecto.**
-2. Crea el archivo en la ruta `apps/web/.env.local` y pega las credenciales:
+Crea el archivo `apps/web/.env.local` con las credenciales de Supabase:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://znqjggifhcldjnxrbcwt.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-clave-anon
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
 ```
 
-*(Nota: el archivo `.env.local` está protegido en `.gitignore` para no exponer claves en el repositorio).*
-
----
-
 ### 3. Ejecutar el Proyecto
-
-Inicia el servidor de desarrollo:
 
 ```bash
 npm run dev
 ```
 
-La aplicación estará corriendo en **`http://localhost:3000`**.
+La aplicación web estará disponible en **`http://localhost:3000`**.
 
 ---
 
-## Rutas Principales de Prueba
+## Ejemplo Rápido de Creación de Despacho (cURL)
 
-| Ruta | Descripción | Acceso |
-|---|---|:---:|
-| **`/login`** | Portal de acceso para administradores del restaurante. | Público (solicitar credenciales al líder) |
-| **`/admin`** | Panel de control unificado: Despachos, Gestión de Flota, Menú y Métricas. | Protegido (requiere login) |
-| **`/onboarding`** | Alta de nuevos restaurantes con wizard multi-paso (solo super-admin). | Protegido (requiere superadmin) |
-| **`/kds/rincon-criollo`** | **Monitor de Cocina KDS:** Pantalla táctil en tiempo real exclusiva para cocina. | Acceso libre / Pantalla dedicada |
-| **`/p/rincon-criollo`** | Tienda pública del restaurante de prueba para armar pedidos y checkout. | Público |
-| **`/tracking/[orderId]`** | Pantalla de seguimiento en vivo con mapa interactivo y estados en tiempo real. | Público |
+```bash
+curl -X POST "http://localhost:3000/api/v1/orders" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: dtk_live_TU_CLAVE_AQUI" \
+  -d '{
+    "external_order_id": "ORD-1092",
+    "customer": {
+      "name": "Juan Perez",
+      "phone": "+51987654321",
+      "address": "Av. Principal 456, Lima",
+      "reference": "Dpto 302",
+      "lat": -12.1219,
+      "lng": -77.0298
+    },
+    "items": [
+      { "name": "Medicamentos / Zapatillas / Pedido", "quantity": 1, "unit_price": 45.00 }
+    ],
+    "payment": {
+      "method": "PAGADO_ORIGEN",
+      "total_amount": 45.00
+    },
+    "notes": "Llamar al llegar"
+  }'
+```
 
 ---
 
@@ -66,53 +93,16 @@ La aplicación estará corriendo en **`http://localhost:3000`**.
 ```text
 delivery_SaaS/
 ├── apps/
-│   ├── web/                     # Aplicación web Next.js (Admin, Storefront, Tracking)
+│   ├── web/                     # Aplicación Next.js (Admin DaaS, APIs B2B, KDS, Tracking)
 │   │   ├── src/
 │   │   │   ├── app/
-│   │   │   │   ├── admin/       # Panel de administración (Despacho, Flota, KDS, Menú)
-│   │   │   │   ├── login/       # Portal de acceso
-│   │   │   │   ├── p/[slug]/    # Menú público y checkout
-│   │   │   │   └── tracking/    # Pantalla de rastreo en vivo
-│   │   │   └── lib/supabase/    # Clientes y tipos de base de datos
-│   │   └── package.json
-│   └── mobile_driver/           # App móvil Flutter para repartidores (Fase 2)
-├── supabase/
-│   └── migrations/              # Scripts SQL del esquema de base de datos
-├── ideas_de_prototipos/         # Prototipos interactivos de referencia UI/UX
-├── package.json
-└── README.md
+│   │   │   │   ├── admin/       # Consola de despacho logístico
+│   │   │   │   ├── api/v1/      # Endpoints REST B2B (/orders, /keys)
+│   │   │   │   ├── kds/         # Tablero de empaque y preparación
+│   │   │   │   ├── tracking/    # Rastreo satelital con PIN anti-fraude
+│   │   │   │   └── onboarding/  # Asistente de alta de comercios
+│   │   │   └── lib/             # Supabase client y Auth de API Keys
+│   └── mobile_driver/           # App móvil Flutter para repartidores
+└── supabase/
+    └── migrations/              # 001_initial_schema, 002_multitenant, 003_daas_state_machine_and_api
 ```
-
----
-
-## Flujo Operativo del Sistema
-
-```text
-1. [Cliente] Realiza pedido en /p/[slug] con dirección o GPS y método de pago
-   │
-   ▼
-2. [Supabase Realtime] Registra orden en estado "RECIBIDO"
-   │
-   ├──► [KDS / Cocina] Visualiza la orden -> Pasa a "EN_PREPARACION" -> Pasa a "LISTO"
-   │
-   ├──► [Admin / Despacho] Asigna repartidor desde /admin
-   │
-   └──► [Repartidor / App Móvil] Inicia viaje ("EN_CAMINO") transmitiendo coordenadas GPS
-           │
-           ▼
-3. [Cliente / Tracking] Visualiza al repartidor en movimiento en /tracking/[orderId]
-   │
-   ▼
-4. [Entrega] Repartidor valida entrega ("ENTREGADO")
-```
-
----
-
-## Reglas de Desarrollo y Contribución
-
-1. **Sin emoticonos:** No utilizar emojis en nombres de variables, mensajes de commit, logs o documentación.
-2. **Comentarios concisos:** Mantener comentarios breves y únicamente cuando aporten valor técnico.
-3. **Verificación de build:** Antes de hacer commit o push, verifica que compile sin errores:
-   ```bash
-   cd apps/web && npm run build
-   ```

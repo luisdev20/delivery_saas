@@ -39,6 +39,7 @@ class OrderModel {
   final double deliveryLat;
   final double deliveryLng;
   final String status;
+  final String pinCode;
   final String paymentMethod;
   final double? cashAmountChange;
   final double totalAmount;
@@ -59,6 +60,7 @@ class OrderModel {
     required this.deliveryLat,
     required this.deliveryLng,
     required this.status,
+    this.pinCode = '1234',
     required this.paymentMethod,
     this.cashAmountChange,
     required this.totalAmount,
@@ -82,6 +84,7 @@ class OrderModel {
       deliveryLat: (json['delivery_lat'] as num).toDouble(),
       deliveryLng: (json['delivery_lng'] as num).toDouble(),
       status: json['status'] as String,
+      pinCode: (json['pin_code'] as String?) ?? '1234',
       paymentMethod: json['payment_method'] as String,
       cashAmountChange: json['cash_amount_change'] != null
           ? (json['cash_amount_change'] as num).toDouble()

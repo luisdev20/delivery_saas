@@ -31,6 +31,7 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   EFECTIVO: 'Efectivo',
   YAPE: 'Yape',
   PLIN: 'Plin',
+  PAGADO_ORIGEN: 'Pagado en Origen',
 };
 
 export default function MenuClient({ restaurant: initialRestaurant, products: initialProducts }: MenuClientProps) {

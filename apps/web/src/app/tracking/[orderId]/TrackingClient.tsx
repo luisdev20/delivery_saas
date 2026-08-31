@@ -52,11 +52,12 @@ function playNearbyChime() {
 }
 
 const STATUS_STEPS = [
-  { key: 'RECIBIDO',       label: 'Recibido',     icon: <Package size={15} /> },
-  { key: 'EN_PREPARACION', label: 'Preparando',   icon: <Clock size={15} /> },
-  { key: 'LISTO',          label: 'Listo',         icon: <CheckCircle size={15} /> },
-  { key: 'EN_CAMINO',      label: 'En camino',    icon: <Truck size={15} /> },
-  { key: 'ENTREGADO',      label: 'Entregado',    icon: <CheckCircle size={15} /> },
+  { key: 'RECIBIDO',           label: 'Recibido',     icon: <Package size={14} /> },
+  { key: 'EN_PREPARACION',     label: 'Preparando',   icon: <Clock size={14} /> },
+  { key: 'LISTO_PARA_ENTREGA', label: 'Listo',        icon: <CheckCircle size={14} /> },
+  { key: 'ASIGNADO',           label: 'Asignado',     icon: <CheckCircle size={14} /> },
+  { key: 'EN_CAMINO',          label: 'En camino',    icon: <Truck size={14} /> },
+  { key: 'ENTREGADO',          label: 'Entregado',    icon: <CheckCircle size={14} /> },
 ];
 
 export default function TrackingClient({ order, restaurant, initialDriverLocation }: Props) {
@@ -429,7 +430,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
               </div>
               <div className="bg-white border-2 border-amber-400 px-3.5 py-1.5 rounded-xl shadow-xs text-center flex-shrink-0">
                 <span className="font-mono text-xl font-black tracking-widest text-amber-950">
-                  {order.order_number.toString().padStart(4, '0')}
+                  {currentOrder.pin_code || '----'}
                 </span>
               </div>
             </div>

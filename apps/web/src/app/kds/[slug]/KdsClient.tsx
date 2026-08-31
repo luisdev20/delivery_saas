@@ -83,7 +83,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
       .from('orders')
       .select('*, order_items(*)')
       .eq('restaurant_id', restaurant.id)
-      .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO'])
+      .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO'])
       .order('created_at', { ascending: true });
     if (data) setOrders(data as Order[]);
   }, [restaurant.id, supabase]);
@@ -112,7 +112,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
           }
         } else if (payload.eventType === 'UPDATE') {
           const updated = payload.new as Order;
-          if (['ENTREGADO', 'CANCELADO'].includes(updated.status)) {
+          if (['EN_CAMINO', 'ENTREGADO', 'CANCELADO'].includes(updated.status)) {
             setOrders(prev => prev.filter(o => o.id !== updated.id));
           } else {
             setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
@@ -126,7 +126,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [restaurant.id, soundEnabled, supabase]);
 
-  // Advance order status (RECIBIDO -> EN_PREPARACION -> LISTO)
+  // Advance order status (RECIBIDO -> EN_PREPARACION -> LISTO_PARA_ENTREGA)
   const advanceStatus = async (orderId: string, nextStatus: OrderStatus) => {
     setUpdatingId(orderId);
     try {
@@ -136,7 +136,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
         .eq('id', orderId);
       if (error) throw error;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
-      if (nextStatus === 'LISTO') {
+      if (nextStatus === 'LISTO_PARA_ENTREGA') {
         toast.success(`Comanda marcada como LISTA para entrega`);
       } else if (nextStatus === 'EN_PREPARACION') {
         toast.success(`Comanda en preparación`);
@@ -162,7 +162,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
 
   const kdsNuevos = useMemo(() => orders.filter(o => o.status === 'RECIBIDO'), [orders]);
   const kdsPrep = useMemo(() => orders.filter(o => o.status === 'EN_PREPARACION'), [orders]);
-  const kdsListos = useMemo(() => orders.filter(o => o.status === 'LISTO'), [orders]);
+  const kdsListos = useMemo(() => orders.filter(o => ['LISTO_PARA_ENTREGA', 'ASIGNADO'].includes(o.status)), [orders]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-900 select-none overflow-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -531,12 +531,12 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
 
                       {/* Action Button */}
                       <button
-                        onClick={() => advanceStatus(order.id, 'LISTO')}
+                        onClick={() => advanceStatus(order.id, 'LISTO_PARA_ENTREGA')}
                         disabled={updatingId === order.id}
                         className="w-full py-1.5 sm:py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all"
                       >
                         <PackageCheck size={12} />
-                        <span className="truncate">{updatingId === order.id ? '...' : 'Listo para Empaque'}</span>
+                        <span className="truncate">{updatingId === order.id ? '...' : 'Listo para Despacho'}</span>
                       </button>
                     </div>
                   );

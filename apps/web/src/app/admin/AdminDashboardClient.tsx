@@ -1,18 +1,22 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { UserRole } from '@/lib/supabase/types';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
   Bell, Package, Truck, CheckCircle, Clock, XCircle,
-  ChefHat, MapPin, Phone, User, CreditCard, MessageSquare,
-  LogOut, Menu, UtensilsCrossed, BarChart2, X, Users,
-  ShoppingBag, Timer, ArrowRight, Plus, Pencil, Trash2, Save, Loader2,
-  TrendingUp, DollarSign, Target, Zap,
+  MapPin, Phone, User, CreditCard, MessageSquare,
+  LogOut, Menu, BarChart2, X, Users,
+  ShoppingBag, Timer, ArrowRight, Plus, Trash2, Loader2,
+  TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
+  ShieldCheck, AlertTriangle, Boxes, PackageCheck, UserCheck,
+  Send, ExternalLink, PlusCircle, HelpCircle,
 } from 'lucide-react';
-import type { Order, Driver, Restaurant, OrderStatus, Product, Subscription } from '@/lib/supabase/types';
-import { PLAN_LIMITS } from '@/lib/supabase/types';
+import type {
+  Order, Driver, Restaurant, OrderStatus, Subscription,
+  MerchantApiKey, CancellationReason, PaymentMethod,
+} from '@/lib/supabase/types';
+import { PLAN_LIMITS, CANCELLATION_REASONS } from '@/lib/supabase/types';
 
 interface Props {
   restaurant: Restaurant;
@@ -22,25 +26,29 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ReactNode; next: OrderStatus | null }> = {
-  RECIBIDO:       { label: 'Recibido',       icon: <Bell size={14} />,        next: 'EN_PREPARACION' },
-  EN_PREPARACION: { label: 'En preparación', icon: <ChefHat size={14} />,     next: 'LISTO' },
-  LISTO:          { label: 'Listo',           icon: <Package size={14} />,     next: 'EN_CAMINO' },
-  EN_CAMINO:      { label: 'En camino',       icon: <Truck size={14} />,       next: 'ENTREGADO' },
-  ENTREGADO:      { label: 'Entregado',       icon: <CheckCircle size={14} />, next: null },
-  CANCELADO:      { label: 'Cancelado',       icon: <XCircle size={14} />,     next: null },
+  RECIBIDO:           { label: 'Recibido',           icon: <Bell size={14} />,         next: 'EN_PREPARACION' },
+  EN_PREPARACION:     { label: 'En preparación',     icon: <Boxes size={14} />,        next: 'LISTO_PARA_ENTREGA' },
+  LISTO_PARA_ENTREGA: { label: 'Listo p/ entrega',   icon: <PackageCheck size={14} />, next: 'ASIGNADO' },
+  ASIGNADO:           { label: 'Asignado',           icon: <UserCheck size={14} />,    next: 'EN_CAMINO' },
+  EN_CAMINO:          { label: 'En camino',          icon: <Truck size={14} />,        next: 'ENTREGADO' },
+  ENTREGADO:          { label: 'Entregado',          icon: <CheckCircle size={14} />,  next: null },
+  CANCELADO:          { label: 'Cancelado',          icon: <XCircle size={14} />,      next: null },
 };
 
 const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
-  RECIBIDO:       'Iniciar preparación',
-  EN_PREPARACION: 'Marcar listo',
-  LISTO:          'Asignar y enviar',
-  EN_CAMINO:      'Confirmar entrega',
-  ENTREGADO:      '',
-  CANCELADO:      '',
+  RECIBIDO:           'Iniciar armado',
+  EN_PREPARACION:     'Marcar listo p/ entrega',
+  LISTO_PARA_ENTREGA: 'Asignar motorizado',
+  ASIGNADO:           'Despachar (En camino)',
+  EN_CAMINO:          'Validar PIN y entregar',
+  ENTREGADO:          '',
+  CANCELADO:          '',
 };
 
-type AdminTab = 'dashboard' | 'fleet' | 'menu' | 'metrics';
+type AdminTab = 'dashboard' | 'fleet' | 'api_keys' | 'metrics';
 type FilterTab = 'active' | 'delivered' | 'all';
+type MetricsRange = 'today' | '7days' | 'month' | 'last_month';
+type CodeTab = 'curl' | 'js' | 'python';
 
 interface SidebarNavItem {
   id: AdminTab;
@@ -49,27 +57,6 @@ interface SidebarNavItem {
   badge?: number;
 }
 
-const DAYS = [
-  { num: 1, label: 'L' },
-  { num: 2, label: 'M' },
-  { num: 3, label: 'X' },
-  { num: 4, label: 'J' },
-  { num: 5, label: 'V' },
-  { num: 6, label: 'S' },
-  { num: 7, label: 'D' },
-];
-
-const CATEGORIES = ['Menú del Día', 'A la Carta', 'Bebidas', 'Postres', 'Entradas', 'Promociones'];
-
-const emptyProductForm = (): Partial<Product> => ({
-  name: '',
-  description: '',
-  category: 'A la Carta',
-  price: 0,
-  is_available: true,
-  available_days: [1, 2, 3, 4, 5, 6, 7],
-});
-
 function timeAgo(dateStr: string): string {
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
   if (diff < 1) return 'ahora';
@@ -77,12 +64,10 @@ function timeAgo(dateStr: string): string {
   return `Hace ${Math.floor(diff / 60)}h`;
 }
 
-type MetricsRange = 'today' | '7days' | 'month' | 'last_month';
-
 export default function AdminDashboardClient({ restaurant, drivers: initialDrivers, subscription, userRole }: Props) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [apiKeys, setApiKeys] = useState<MerchantApiKey[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('active');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
@@ -99,10 +84,39 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
   const [newDriverPhone, setNewDriverPhone] = useState('');
   const [savingDriver, setSavingDriver] = useState(false);
 
-  // Product modal
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
-  const [isNewProduct, setIsNewProduct] = useState(false);
-  const [savingProduct, setSavingProduct] = useState(false);
+  // Manual Dispatch Modal
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    delivery_address: '',
+    delivery_reference: '',
+    item_description: '',
+    total_amount: '',
+    payment_method: 'PAGADO_ORIGEN' as PaymentMethod,
+    cash_amount_change: '',
+    notes: '',
+  });
+  const [creatingManual, setCreatingManual] = useState(false);
+
+  // PIN Validation Modal
+  const [pinModalOrder, setPinModalOrder] = useState<Order | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [validatingPin, setValidatingPin] = useState(false);
+
+  // Cancellation Modal
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState<CancellationReason>('QUIEBRE_STOCK');
+  const [cancelNote, setCancelNote] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
+  // API Key creation & display modal
+  const [showNewKeyModal, setShowNewKeyModal] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [rawKeyDisplay, setRawKeyDisplay] = useState<{ rawKey: string; name: string } | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [activeCodeTab, setActiveCodeTab] = useState<CodeTab>('curl');
 
   // Metrics
   const [metricsRange, setMetricsRange] = useState<MetricsRange>('today');
@@ -123,10 +137,10 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         .update({ is_open: newStatus })
         .eq('id', restaurant.id);
       if (error) throw error;
-      toast.success(newStatus ? 'Restaurante ABIERTO: Recibiendo nuevos pedidos' : 'Restaurante CERRADO: Pedidos en línea pausados');
+      toast.success(newStatus ? 'Comercio ABIERTO: Recibiendo requerimientos de despacho' : 'Comercio CERRADO: Despachos pausados');
     } catch {
       setCurrentRestaurant(prev => ({ ...prev, is_open: !newStatus }));
-      toast.error('Error al actualizar el estado del restaurante');
+      toast.error('Error al actualizar el estado del comercio');
     } finally {
       setTogglingOpen(false);
     }
@@ -142,16 +156,6 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     if (data) setOrders(data as Order[]);
   }, [restaurant.id, supabase]);
 
-  const loadProducts = useCallback(async () => {
-    const { data } = await supabase
-      .from('products')
-      .select('*')
-      .eq('restaurant_id', restaurant.id)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
-    if (data) setProducts(data as Product[]);
-  }, [restaurant.id, supabase]);
-
   const loadDrivers = useCallback(async () => {
     const { data } = await supabase
       .from('drivers')
@@ -160,12 +164,22 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     if (data) setDrivers(data as Driver[]);
   }, [restaurant.id, supabase]);
 
+  const loadApiKeys = useCallback(async () => {
+    const { data } = await supabase
+      .from('merchant_api_keys')
+      .select('*')
+      .eq('restaurant_id', restaurant.id)
+      .order('created_at', { ascending: false });
+    if (data) setApiKeys(data as MerchantApiKey[]);
+  }, [restaurant.id, supabase]);
+
   useEffect(() => {
     loadOrders();
-    loadProducts();
     loadDrivers();
-  }, [loadOrders, loadProducts, loadDrivers]);
+    loadApiKeys();
+  }, [loadOrders, loadDrivers, loadApiKeys]);
 
+  // Realtime Supabase Subscription for Orders
   useEffect(() => {
     const channel = supabase
       .channel(`orders-${restaurant.id}`)
@@ -185,7 +199,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               audioRef.current = new Audio('/sounds/new-order.mp3');
               audioRef.current.play().catch(() => {});
             } catch {}
-            toast.success(`Nuevo pedido de ${payload.new.customer_name}`, { duration: 8000 });
+            toast.info(`📦 Nuevo despacho #${newOrder.order_number} (${newOrder.origin_system || 'API'}) de ${newOrder.customer_name}`, { duration: 8000 });
           }
         } else if (payload.eventType === 'UPDATE') {
           setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
@@ -246,55 +260,194 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     return () => { isMounted = false; };
   }, [trackingDrawerOrder, restaurant.brand_color]);
 
+  // Order Lifecycle Transitions
   const advanceStatus = async (order: Order) => {
-    const next = STATUS_CONFIG[order.status].next;
-    if (!next) return;
-    if (next === 'EN_CAMINO' && !order.driver_id && drivers.length > 0) {
-      toast.error('Asigne un repartidor antes de enviar');
-      return;
+    if (order.status === 'RECIBIDO') {
+      await updateOrderStatus(order.id, 'EN_PREPARACION');
+    } else if (order.status === 'EN_PREPARACION') {
+      await updateOrderStatus(order.id, 'LISTO_PARA_ENTREGA');
+    } else if (order.status === 'LISTO_PARA_ENTREGA') {
+      if (!order.driver_id && drivers.length > 0) {
+        toast.error('Asigne un repartidor de la lista para pasar a estado ASIGNADO');
+        setSelectedOrder(order);
+        return;
+      }
+      await updateOrderStatus(order.id, 'ASIGNADO');
+    } else if (order.status === 'ASIGNADO') {
+      await updateOrderStatus(order.id, 'EN_CAMINO', { in_route_at: new Date().toISOString() });
+    } else if (order.status === 'EN_CAMINO') {
+      setPinModalOrder(order);
+      setPinInput('');
     }
-    setUpdatingId(order.id);
-    const updates: Partial<Order> = { status: next };
-    if (next === 'ENTREGADO') updates.delivered_at = new Date().toISOString();
-    const { error } = await supabase.from('orders').update(updates).eq('id', order.id);
-    if (error) toast.error('Error al actualizar el estado');
-    else toast.success(`Orden #${order.order_number} -> ${STATUS_CONFIG[next].label}`);
+  };
+
+  const updateOrderStatus = async (orderId: string, nextStatus: OrderStatus, extraFields: Partial<Order> = {}) => {
+    setUpdatingId(orderId);
+    const updates: Partial<Order> = { status: nextStatus, ...extraFields };
+    if (nextStatus === 'ENTREGADO') updates.delivered_at = new Date().toISOString();
+    const { error } = await supabase.from('orders').update(updates).eq('id', orderId);
+    if (error) {
+      toast.error('Error al actualizar el estado del despacho');
+    } else {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => prev ? { ...prev, ...updates } : null);
+      }
+      toast.success(`Despacho actualizado -> ${STATUS_CONFIG[nextStatus].label}`);
+    }
     setUpdatingId(null);
   };
 
-  const assignDriver = async (orderId: string, driverId: string) => {
-    const { error } = await supabase.from('orders').update({ driver_id: driverId }).eq('id', orderId);
-    if (!error) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId } : o));
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => prev ? { ...prev, driver_id: driverId } : null);
-      }
-      toast.success('Repartidor asignado');
+  // Confirm PIN delivery
+  const handleConfirmPinDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pinModalOrder) return;
+    if (pinInput.trim() !== pinModalOrder.pin_code) {
+      toast.error('PIN incorrecto. El destinatario debe proporcionar su código de seguridad de 4 dígitos.');
+      return;
     }
+
+    setValidatingPin(true);
+    await updateOrderStatus(pinModalOrder.id, 'ENTREGADO');
+    setValidatingPin(false);
+    setPinModalOrder(null);
+    toast.success(`¡Entrega #${pinModalOrder.order_number} validada con éxito mediante PIN!`);
   };
 
-  const cancelOrder = async (orderId: string) => {
-    if (!confirm('¿Desea cancelar esta orden?')) return;
-    await supabase.from('orders').update({ status: 'CANCELADO' }).eq('id', orderId);
-    toast.error('Orden cancelada');
+  // Structured Cancellation
+  const handleConfirmCancellation = async () => {
+    if (!cancelModalOrder) return;
+    setCancelling(true);
+    const reasonText = `${CANCELLATION_REASONS[cancelReason]}${cancelNote ? `: ${cancelNote.trim()}` : ''}`;
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: 'CANCELADO',
+        cancellation_reason: reasonText,
+      })
+      .eq('id', cancelModalOrder.id);
+
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === cancelModalOrder.id ? { ...o, status: 'CANCELADO', cancellation_reason: reasonText } : o));
+      if (selectedOrder?.id === cancelModalOrder.id) {
+        setSelectedOrder(prev => prev ? { ...prev, status: 'CANCELADO', cancellation_reason: reasonText } : null);
+      }
+      toast.error(`Despacho #${cancelModalOrder.order_number} cancelado: ${CANCELLATION_REASONS[cancelReason]}`);
+      setCancelModalOrder(null);
+      setCancelNote('');
+    } else {
+      toast.error('Error al cancelar el despacho');
+    }
+    setCancelling(false);
+  };
+
+  const assignDriver = async (orderId: string, driverId: string) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    const shouldAdvanceToAssigned = targetOrder?.status === 'LISTO_PARA_ENTREGA' || targetOrder?.status === 'RECIBIDO' || targetOrder?.status === 'EN_PREPARACION';
+    const nextStatus: OrderStatus = shouldAdvanceToAssigned ? 'ASIGNADO' : (targetOrder?.status || 'ASIGNADO');
+
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        driver_id: driverId,
+        status: nextStatus,
+        assigned_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, status: nextStatus, assigned_at: new Date().toISOString() } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => prev ? { ...prev, driver_id: driverId, status: nextStatus } : null);
+      }
+      toast.success('Repartidor asignado -> Estado: ASIGNADO');
+    }
   };
 
   const sendTrackingLink = (order: Order) => {
     const url = `${window.location.origin}/tracking/${order.id}`;
     const msg = encodeURIComponent(
-      `Hola ${order.customer_name}.\nSu pedido de ${restaurant.name} está en camino.\n\nSeguimiento en vivo:\n${url}`
+      `Hola ${order.customer_name}.\nSu pedido de ${restaurant.name} está en camino.\n\nPIN de Entrega: *${order.pin_code}*\n\nSeguimiento satelital en vivo:\n${url}`
     );
     const phone = order.customer_phone.replace(/\D/g, '');
     window.open(`https://wa.me/51${phone}?text=${msg}`, '_blank');
   };
 
+  // Create Manual Dispatch Order
+  const handleCreateManualDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualForm.customer_name || !manualForm.customer_phone || !manualForm.delivery_address) {
+      toast.error('Nombre, teléfono y dirección son obligatorios');
+      return;
+    }
+
+    setCreatingManual(true);
+    const pinCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const defaultLat = restaurant.lat || -12.0464;
+    const defaultLng = restaurant.lng || -77.0428;
+
+    const totalAmount = parseFloat(manualForm.total_amount) || 0;
+
+    const { data: newOrder, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        restaurant_id: restaurant.id,
+        origin_system: 'MANUAL_DISPATCH',
+        pin_code: pinCode,
+        customer_name: manualForm.customer_name.trim(),
+        customer_phone: manualForm.customer_phone.trim(),
+        delivery_address: manualForm.delivery_address.trim(),
+        delivery_reference: manualForm.delivery_reference.trim() || null,
+        delivery_lat: defaultLat,
+        delivery_lng: defaultLng,
+        status: 'RECIBIDO',
+        payment_method: manualForm.payment_method,
+        cash_amount_change: manualForm.payment_method === 'EFECTIVO' && manualForm.cash_amount_change ? parseFloat(manualForm.cash_amount_change) : null,
+        total_amount: totalAmount,
+        notes: manualForm.notes.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (orderError || !newOrder) {
+      toast.error('Error al registrar el despacho manual');
+      setCreatingManual(false);
+      return;
+    }
+
+    // Insert line item
+    const itemName = manualForm.item_description.trim() || 'Paquete para entrega';
+    await supabase.from('order_items').insert({
+      order_id: newOrder.id,
+      product_name: itemName,
+      quantity: 1,
+      unit_price: totalAmount,
+    });
+
+    setOrders(prev => [newOrder as Order, ...prev]);
+    toast.success(`Despacho #${newOrder.order_number} creado con éxito. PIN: ${pinCode}`);
+    setShowManualModal(false);
+    setManualForm({
+      customer_name: '',
+      customer_phone: '',
+      delivery_address: '',
+      delivery_reference: '',
+      item_description: '',
+      total_amount: '',
+      payment_method: 'PAGADO_ORIGEN',
+      cash_amount_change: '',
+      notes: '',
+    });
+    setCreatingManual(false);
+  };
+
+  // Drivers Management
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDriverName || !newDriverPhone) {
       toast.error('Nombre y teléfono son obligatorios');
       return;
     }
-    // Validar límite de repartidores del plan
     if (subscription) {
       const activeDriverCount = drivers.filter(d => d.is_active).length;
       if (activeDriverCount >= subscription.max_drivers) {
@@ -339,99 +492,61 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     }
   };
 
-  const toggleProductAvailability = async (product: Product) => {
-    const newVal = !product.is_available;
+  // API Keys Management
+  const handleGenerateApiKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGeneratingKey(true);
+    try {
+      const res = await fetch('/api/v1/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName.trim() || 'Clave API Producción' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al generar clave');
+
+      setRawKeyDisplay({ rawKey: data.raw_key, name: data.key.name });
+      setApiKeys(prev => [data.key, ...prev]);
+      setShowNewKeyModal(false);
+      setNewKeyName('');
+      toast.success('Clave API generada con éxito');
+    } catch (err: unknown) {
+      toast.error((err as Error).message || 'Error al generar clave API');
+    } finally {
+      setGeneratingKey(false);
+    }
+  };
+
+  const handleToggleApiKey = async (key: MerchantApiKey) => {
+    const newVal = !key.is_active;
     const { error } = await supabase
-      .from('products')
-      .update({ is_available: newVal })
-      .eq('id', product.id);
+      .from('merchant_api_keys')
+      .update({ is_active: newVal })
+      .eq('id', key.id);
     if (!error) {
-      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_available: newVal } : p));
-      toast.success(newVal ? `"${product.name}" activado` : `"${product.name}" marcado como agotado`);
+      setApiKeys(prev => prev.map(k => k.id === key.id ? { ...k, is_active: newVal } : k));
+      toast.success(newVal ? 'Clave API activada' : 'Clave API deshabilitada');
     }
   };
 
-  const handleSaveProduct = async () => {
-    if (!editingProduct?.name || !editingProduct.price) {
-      toast.error('Nombre y precio son obligatorios');
-      return;
-    }
-    setSavingProduct(true);
-    const payload = {
-      restaurant_id: restaurant.id,
-      name: editingProduct.name,
-      description: editingProduct.description || null,
-      category: editingProduct.category || 'A la Carta',
-      price: Number(editingProduct.price),
-      is_available: editingProduct.is_available ?? true,
-      available_days: editingProduct.available_days || [1, 2, 3, 4, 5, 6, 7],
-    };
-
-    if (isNewProduct) {
-      const { data, error } = await supabase.from('products').insert(payload).select().single();
-      if (!error && data) {
-        setProducts(prev => [...prev, data as Product]);
-        toast.success(`"${data.name}" creado`);
-        setEditingProduct(null);
-      } else {
-        toast.error('Error al crear el producto');
-      }
-    } else if (editingProduct.id) {
-      const { data, error } = await supabase
-        .from('products')
-        .update(payload)
-        .eq('id', editingProduct.id)
-        .select()
-        .single();
-      if (!error && data) {
-        setProducts(prev => prev.map(p => p.id === data.id ? data as Product : p));
-        toast.success(`"${data.name}" actualizado`);
-        setEditingProduct(null);
-      } else {
-        toast.error('Error al guardar');
-      }
-    }
-    setSavingProduct(false);
-  };
-
-  const handleDeleteProduct = async (product: Product) => {
-    if (!confirm(`¿Eliminar "${product.name}"?`)) return;
-    const { error } = await supabase.from('products').delete().eq('id', product.id);
+  const handleDeleteApiKey = async (key: MerchantApiKey) => {
+    if (!confirm(`¿Eliminar la clave "${key.name}"? Los sistemas que usen este token ya no podrán despachar.`)) return;
+    const { error } = await supabase.from('merchant_api_keys').delete().eq('id', key.id);
     if (!error) {
-      setProducts(prev => prev.filter(p => p.id !== product.id));
-      toast.success(`"${product.name}" eliminado`);
+      setApiKeys(prev => prev.filter(k => k.id !== key.id));
+      toast.success('Clave API eliminada');
     }
   };
 
-  const filteredOrders = orders.filter(o => {
-    if (activeFilter === 'active') return !['ENTREGADO', 'CANCELADO'].includes(o.status);
-    if (activeFilter === 'delivered') return o.status === 'ENTREGADO';
-    return true;
-  });
-
-  const activeCount  = orders.filter(o => !['ENTREGADO', 'CANCELADO'].includes(o.status)).length;
-  const enRutaCount  = orders.filter(o => o.status === 'EN_CAMINO').length;
-  const todayCount   = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length;
-
-  /* KDS buckets */
-  const kdsNuevos = orders.filter(o => o.status === 'RECIBIDO');
-  const kdsPrep   = orders.filter(o => o.status === 'EN_PREPARACION');
-  const kdsListos = orders.filter(o => o.status === 'LISTO');
-
-  const groupedProducts = useMemo(() => {
-    return products.reduce<Record<string, Product[]>>((acc, p) => {
-      if (!acc[p.category]) acc[p.category] = [];
-      acc[p.category].push(p);
-      return acc;
-    }, {});
-  }, [products]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
+  const handleCopyRawKey = () => {
+    if (!rawKeyDisplay) return;
+    navigator.clipboard.writeText(rawKeyDisplay.rawKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2500);
+    toast.success('Clave copiada al portapapeles');
   };
 
-  // Load metrics orders for extended ranges
+  // Metrics Data Loading
   const loadMetricsOrders = useCallback(async (range: MetricsRange) => {
     let from: string;
     let to: string = new Date().toISOString();
@@ -464,13 +579,11 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     }
   }, [adminTab, metricsRange, loadMetricsOrders]);
 
-  // Metrics computations
   const metricsData = useMemo(() => {
     const delivered = metricsOrders.filter(o => o.status === 'ENTREGADO');
     const cancelled = metricsOrders.filter(o => o.status === 'CANCELADO');
     const totalRevenue = delivered.reduce((sum, o) => sum + o.total_amount, 0);
 
-    // Average delivery time in minutes
     const deliveryTimes = delivered
       .filter(o => o.delivered_at && o.created_at)
       .map(o => (new Date(o.delivered_at!).getTime() - new Date(o.created_at).getTime()) / 60000);
@@ -482,12 +595,10 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
       ? Math.round((delivered.length / (delivered.length + cancelled.length || 1)) * 100)
       : 0;
 
-    // Payment distribution
-    const paymentCounts: Record<string, number> = { EFECTIVO: 0, YAPE: 0, PLIN: 0 };
+    const paymentCounts: Record<string, number> = { EFECTIVO: 0, YAPE: 0, PLIN: 0, PAGADO_ORIGEN: 0 };
     delivered.forEach(o => { paymentCounts[o.payment_method] = (paymentCounts[o.payment_method] || 0) + 1; });
     const paymentTotal = Object.values(paymentCounts).reduce((a, b) => a + b, 0) || 1;
 
-    // Per-driver performance
     const driverStats = drivers.map(d => {
       const driverOrders = delivered.filter(o => o.driver_id === d.id);
       const driverTimes = driverOrders
@@ -518,10 +629,25 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     };
   }, [metricsOrders, drivers]);
 
-  const sidebarNavItems = [
-    { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Dashboard Despachos' },
+  const filteredOrders = orders.filter(o => {
+    if (activeFilter === 'active') return !['ENTREGADO', 'CANCELADO'].includes(o.status);
+    if (activeFilter === 'delivered') return o.status === 'ENTREGADO';
+    return true;
+  });
+
+  const activeCount  = orders.filter(o => !['ENTREGADO', 'CANCELADO'].includes(o.status)).length;
+  const enRutaCount  = orders.filter(o => o.status === 'EN_CAMINO').length;
+  const todayCount   = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length;
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
+
+  const sidebarNavItems: SidebarNavItem[] = [
+    { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Monitor de Despachos', badge: activeCount },
     { id: 'fleet',     icon: <Users size={18} />,     label: 'Gestión de Flota', badge: drivers.filter(d => d.is_active).length },
-    { id: 'menu',      icon: <UtensilsCrossed size={18} />, label: 'Menú del Restaurante' },
+    { id: 'api_keys',  icon: <Key size={18} />,       label: 'Integración API B2B', badge: apiKeys.filter(k => k.is_active).length },
     { id: 'metrics',   icon: <TrendingUp size={18} />, label: 'Métricas' },
   ];
 
@@ -538,7 +664,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         {/* Brand Header */}
         <div className="p-6 border-b border-indigo-800/60 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--saas-600)' }}>
-            <ShoppingBag size={18} color="white" />
+            <Truck size={18} color="white" />
           </div>
           <div className="overflow-hidden">
             <h1 className="font-bold text-sm text-white tracking-wide truncate">Delivery Tracker</h1>
@@ -560,7 +686,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             return (
               <button
                 key={item.id}
-                onClick={() => { setAdminTab(item.id as AdminTab); setSelectedOrder(null); setSidebarOpen(false); }}
+                onClick={() => { setAdminTab(item.id); setSelectedOrder(null); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-sm'
@@ -579,7 +705,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             );
           })}
 
-          {/* Dedicated KDS Kitchen Monitor Link */}
+          {/* Dedicated KDS Kitchen / Packing Monitor Link */}
           <div className="pt-2">
             <a
               href={`/kds/${restaurant.slug}`}
@@ -589,8 +715,8 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               id="btn-open-kds-screen"
             >
               <div className="flex items-center gap-2">
-                <ChefHat size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
-                <span>Pantalla Cocina KDS</span>
+                <Boxes size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
+                <span>Tablero de Empaque KDS</span>
               </div>
               <span className="text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded text-amber-200">
                 Abrir ↗
@@ -608,7 +734,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               >
                 <div className="flex items-center gap-2">
                   <Plus size={16} className="text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span>Nuevo Restaurante</span>
+                  <span>Nuevo Comercio</span>
                 </div>
                 <span className="text-[10px] bg-emerald-500/30 px-1.5 py-0.5 rounded text-emerald-200">
                   Admin
@@ -622,10 +748,10 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         <div className="p-4 border-t border-indigo-800/60 bg-indigo-950/40">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold tracking-wider uppercase text-indigo-300">
-              Estado del Restaurante
+              Motor Logístico
             </span>
             <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40' : 'bg-red-500/20 text-red-300 border border-red-400/40'}`}>
-              {currentRestaurant.is_open ? 'ABIERTO' : 'CERRADO'}
+              {currentRestaurant.is_open ? 'RECIBIENDO' : 'PAUSADO'}
             </span>
           </div>
           <button
@@ -637,9 +763,9 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             {togglingOpen ? (
               <Loader2 size={14} className="animate-spin" />
             ) : currentRestaurant.is_open ? (
-              <>Cerrar Restaurante (Pausar)</>
+              <>Pausar Despachos</>
             ) : (
-              <>Abrir Restaurante (Recibir)</>
+              <>Reanudar Despachos</>
             )}
           </button>
         </div>
@@ -673,7 +799,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${currentRestaurant.is_open ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}
           >
             <div className={`w-2 h-2 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500 pulse-dot' : 'bg-red-500'}`} />
-            {currentRestaurant.is_open ? 'Abierto' : 'Cerrado'}
+            {currentRestaurant.is_open ? 'Activo' : 'Pausado'}
           </button>
         </header>
 
@@ -681,480 +807,503 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         {adminTab === 'dashboard' && (
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
             {/* Header */}
-            <header className="flex justify-between items-center mb-4 sm:mb-6">
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
                 <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Monitor de Despachos</h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control operativo en tiempo real</p>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control logístico y telemetría en tiempo real</p>
               </div>
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
-                Sincronización en vivo
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowManualModal(true)}
+                  className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5"
+                  id="btn-new-manual-dispatch"
+                >
+                  <PlusCircle size={16} /> + Nuevo Despacho
+                </button>
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
+                  Realtime DaaS
+                </div>
               </div>
             </header>
 
-            {/* Stat Cards (3-Column compact on mobile, spacious on desktop) */}
+            {/* Stat Cards */}
             <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-4 sm:mb-8">
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
                 <div className="w-7 h-7 sm:w-12 sm:h-12 bg-indigo-50 sm:bg-indigo-100 rounded-lg sm:rounded-full flex items-center justify-center text-indigo-600 shrink-0">
-                  <ShoppingBag size={14} className="sm:hidden" />
-                  <ShoppingBag size={22} className="hidden sm:block" />
+                  <Package size={14} className="sm:hidden" />
+                  <Package size={22} className="hidden sm:block" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">Envíos Hoy</p>
-                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{todayCount}</p>
+                <div>
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Envíos Hoy</p>
+                  <p className="text-sm sm:text-2xl font-bold text-slate-800 leading-tight mt-0.5 sm:mt-0">{todayCount}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
                 <div className="w-7 h-7 sm:w-12 sm:h-12 bg-amber-50 sm:bg-amber-100 rounded-lg sm:rounded-full flex items-center justify-center text-amber-600 shrink-0">
                   <Truck size={14} className="sm:hidden" />
                   <Truck size={22} className="hidden sm:block" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">En Ruta</p>
-                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{enRutaCount}</p>
+                <div>
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">En Ruta</p>
+                  <p className="text-sm sm:text-2xl font-bold text-amber-600 leading-tight mt-0.5 sm:mt-0">{enRutaCount}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-4 text-center sm:text-left">
+              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
                 <div className="w-7 h-7 sm:w-12 sm:h-12 bg-emerald-50 sm:bg-emerald-100 rounded-lg sm:rounded-full flex items-center justify-center text-emerald-600 shrink-0">
-                  <Timer size={14} className="sm:hidden" />
-                  <Timer size={22} className="hidden sm:block" />
+                  <Boxes size={14} className="sm:hidden" />
+                  <Boxes size={22} className="hidden sm:block" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-medium truncate">Activos</p>
-                  <p className="text-lg sm:text-2xl font-black text-slate-800 leading-tight">{activeCount}</p>
+                <div>
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Activos</p>
+                  <p className="text-sm sm:text-2xl font-bold text-emerald-600 leading-tight mt-0.5 sm:mt-0">{activeCount}</p>
                 </div>
               </div>
             </div>
 
-            {/* Orders Container */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mb-6">
+            {/* Orders Table Container */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {/* Filter Tabs */}
-              <div className="p-2.5 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2">
-                <div className="flex gap-1.5 sm:gap-2">
-                  {([['active', 'Activas', activeCount], ['delivered', 'Entregadas', null], ['all', 'Todas', null]] as const).map(([tab, label, count]) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveFilter(tab)}
-                      className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        activeFilter === tab
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {label} {count !== null && count > 0 ? `(${count})` : ''}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
-                  {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}
-                </span>
-              </div>
-
-              {/* Mobile View: Cards */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {filteredOrders.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400 text-xs">
-                    {activeFilter === 'active' ? 'No hay órdenes activas en este momento' : 'No hay órdenes en esta vista'}
-                  </div>
-                ) : (
-                  filteredOrders.map(order => (
-                    <div
-                      key={order.id}
-                      onClick={() => setSelectedOrder(order)}
-                      className="p-3.5 hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer space-y-2.5"
-                    >
-                      {/* Card Top: Number, Time & Status */}
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="font-bold text-slate-900 text-sm">#{order.order_number}</span>
-                          <span className="text-[10px] text-slate-400 font-normal ml-2">{timeAgo(order.created_at)}</span>
-                        </div>
-                        <span className={`badge badge-${order.status} text-[10px] px-2 py-0.5`}>
-                          {STATUS_CONFIG[order.status].icon}
-                          {STATUS_CONFIG[order.status].label}
-                        </span>
-                      </div>
-
-                      {/* Card Mid: Customer & Driver */}
-                      <div className="flex justify-between items-center text-xs">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-slate-800 block truncate">{order.customer_name}</span>
-                          <span className="text-[11px] text-slate-400">{order.customer_phone}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold text-slate-900 block">S/ {order.total_amount.toFixed(2)}</span>
-                          <span className="text-[10px] text-slate-400">{order.payment_method}</span>
-                        </div>
-                      </div>
-
-                      {/* Card Bottom: Action Buttons */}
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 gap-2" onClick={e => e.stopPropagation()}>
-                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                          {order.driver ? (
-                            <span className="inline-flex items-center gap-1 text-slate-700 font-medium">
-                              <Truck size={11} className="text-indigo-600 shrink-0" /> {(order.driver as Driver).name}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 italic text-[10px]">Sin asignar</span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {['EN_CAMINO', 'LISTO'].includes(order.status) && (
-                            <button
-                              onClick={() => setTrackingDrawerOrder(order)}
-                              className="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-2.5 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"
-                              id={`track-m-${order.order_number}`}
-                            >
-                              <MapPin size={11} /> Rastrear
-                            </button>
-                          )}
-                          {STATUS_CONFIG[order.status].next && (
-                            <button
-                              onClick={() => advanceStatus(order)}
-                              disabled={updatingId === order.id}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded text-xs font-bold transition-colors"
-                            >
-                              {updatingId === order.id ? '...' : STATUS_NEXT_LABEL[order.status]}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded text-xs font-semibold"
-                          >
-                            Ver
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Desktop View: Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200">
-                    <tr>
-                      <th className="p-4 font-semibold">ID Pedido</th>
-                      <th className="p-4 font-semibold">Cliente</th>
-                      <th className="p-4 font-semibold">Repartidor</th>
-                      <th className="p-4 font-semibold">Total / Pago</th>
-                      <th className="p-4 font-semibold">Estado</th>
-                      <th className="p-4 font-semibold text-right">Acción Operativa</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-16 text-slate-400">
-                          {activeFilter === 'active' ? 'No hay órdenes activas en este momento' : 'No hay órdenes en esta vista'}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredOrders.map(order => (
-                        <tr
-                          key={order.id}
-                          onClick={() => setSelectedOrder(order)}
-                          className="hover:bg-slate-50 cursor-pointer transition-colors"
-                        >
-                          <td className="p-4 font-bold text-slate-800">
-                            #{order.order_number}
-                            <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{timeAgo(order.created_at)}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className="font-semibold text-slate-800 block">{order.customer_name}</span>
-                            <span className="text-xs text-slate-400">{order.customer_phone}</span>
-                          </td>
-                          <td className="p-4 text-slate-600">
-                            {order.driver ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                                <Truck size={13} className="text-indigo-600" /> {(order.driver as Driver).name}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-400 italic">Sin asignar</span>
-                            )}
-                          </td>
-                          <td className="p-4 font-bold text-slate-800">
-                            S/ {order.total_amount.toFixed(2)}
-                            <span className="block text-[11px] font-normal text-slate-400">{order.payment_method}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`badge badge-${order.status}`}>
-                              {STATUS_CONFIG[order.status].icon}
-                              {STATUS_CONFIG[order.status].label}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
-                              {['EN_CAMINO', 'LISTO'].includes(order.status) && (
-                                <button
-                                  onClick={() => setTrackingDrawerOrder(order)}
-                                  className="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5 text-xs"
-                                  id={`track-${order.order_number}`}
-                                >
-                                  <MapPin size={13} /> Rastrear
-                                </button>
-                              )}
-                              {STATUS_CONFIG[order.status].next && (
-                                <button
-                                  onClick={() => advanceStatus(order)}
-                                  disabled={updatingId === order.id}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-semibold transition-colors text-xs flex items-center gap-1"
-                                >
-                                  {updatingId === order.id ? '...' : STATUS_NEXT_LABEL[order.status]}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => setSelectedOrder(order)}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded text-xs font-semibold"
-                              >
-                                Ver
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+              <div className="flex border-b border-slate-200 p-2 gap-2 overflow-x-auto bg-slate-50/50">
+                {([['active', 'Activos', activeCount], ['delivered', 'Entregados', null], ['all', 'Todos', null]] as const).map(([tab, label, count]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveFilter(tab)}
+                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 ${
+                      activeFilter === tab
+                        ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {label}
+                    {count != null && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeFilter === tab ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                        {count}
+                      </span>
                     )}
-                  </tbody>
-                </table>
+                  </button>
+                ))}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* ================= TAB 2: FLEET (GESTIÓN DE FLOTA) ================= */}
-        {adminTab === 'fleet' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            <header className="flex justify-between items-center mb-4 sm:mb-8">
-              <div>
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Flota</h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y accesos a la App Móvil</p>
-              </div>
-              <button
-                onClick={() => setShowDriverModal(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 sm:gap-2 transition-colors"
-                id="btn-new-driver"
-              >
-                <Plus size={15} /> Nuevo Repartidor
-              </button>
-            </header>
-
-            {/* Mobile Driver Cards */}
-            <div className="md:hidden space-y-3 mb-6">
-              {drivers.length === 0 ? (
-                <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-xs">
-                  No hay repartidores registrados.
+              {filteredOrders.length === 0 ? (
+                <div className="p-8 text-center text-slate-400">
+                  <Package size={36} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm font-medium">No hay órdenes en esta categoría</p>
+                  <p className="text-xs text-slate-400 mt-1">Crea un despacho manual o conecta tu sistema vía API</p>
                 </div>
               ) : (
-                drivers.map(driver => (
-                  <div key={driver.id} className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-xs space-y-2.5">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-800 text-sm">{driver.name}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        driver.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {driver.is_active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <a
-                        href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-emerald-600 font-medium flex items-center gap-1 hover:underline text-xs"
-                      >
-                        <Phone size={12} /> {driver.phone}
-                      </a>
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(driver.created_at).toLocaleDateString('es-PE')}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex justify-end">
-                      <button
-                        onClick={() => handleToggleDriver(driver)}
-                        className="text-xs font-semibold px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-100 transition-colors"
-                      >
-                        {driver.is_active ? 'Desactivar' : 'Activar'}
-                      </button>
-                    </div>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-200">
+                        <tr>
+                          <th className="py-3 px-4">Orden / Origen</th>
+                          <th className="py-3 px-4">PIN Anti-Fraude</th>
+                          <th className="py-3 px-4">Destinatario</th>
+                          <th className="py-3 px-4">Estado</th>
+                          <th className="py-3 px-4">Motorizado</th>
+                          <th className="py-3 px-4">Total</th>
+                          <th className="py-3 px-4 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredOrders.map(order => (
+                          <tr
+                            key={order.id}
+                            className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                            onClick={() => setSelectedOrder(order)}
+                          >
+                            <td className="py-3.5 px-4 font-medium text-slate-900">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900">#{order.order_number}</span>
+                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                  order.origin_system === 'MANUAL_DISPATCH' ? 'bg-slate-100 text-slate-600' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                }`}>
+                                  {order.origin_system || 'API'}
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-400 font-normal block mt-0.5">{timeAgo(order.created_at)}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-mono font-bold text-xs">
+                                <ShieldCheck size={12} className="text-amber-600" />
+                                {order.pin_code || '----'}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <p className="font-semibold text-slate-800">{order.customer_name}</p>
+                              <p className="text-xs text-slate-400 truncate max-w-[200px]">{order.delivery_address}</p>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`badge badge-${order.status}`}>
+                                {STATUS_CONFIG[order.status].icon}
+                                {STATUS_CONFIG[order.status].label}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {order.driver ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md">
+                                  <User size={12} /> {order.driver.name}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">Sin asignar</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-slate-800">
+                              S/ {order.total_amount.toFixed(2)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {STATUS_CONFIG[order.status].next && (
+                                  <button
+                                    onClick={() => advanceStatus(order)}
+                                    disabled={updatingId === order.id}
+                                    className="btn btn-indigo btn-sm text-xs py-1.5 px-2.5"
+                                  >
+                                    {updatingId === order.id ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      STATUS_NEXT_LABEL[order.status]
+                                    )}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setTrackingDrawerOrder(order)}
+                                  className="btn btn-ghost btn-sm text-indigo-600 p-1.5 hover:bg-indigo-50"
+                                  title="Ver Mapa Satelital"
+                                >
+                                  <MapPin size={16} />
+                                </button>
+                                {!['ENTREGADO', 'CANCELADO'].includes(order.status) && (
+                                  <button
+                                    onClick={() => setCancelModalOrder(order)}
+                                    className="btn btn-ghost btn-sm text-red-500 p-1.5 hover:bg-red-50"
+                                    title="Cancelar Despacho"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))
-              )}
-            </div>
 
-            {/* Desktop Driver Table */}
-            <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                  <tr>
-                    <th className="p-4 font-semibold">Repartidor</th>
-                    <th className="p-4 font-semibold">Contacto (WhatsApp)</th>
-                    <th className="p-4 font-semibold">Fecha Registro</th>
-                    <th className="p-4 font-semibold">Estado</th>
-                    <th className="p-4 font-semibold text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {drivers.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-16 text-slate-400">
-                        No hay repartidores registrados. Agregue el primero haciendo clic en &ldquo;Nuevo Repartidor&rdquo;.
-                      </td>
-                    </tr>
-                  ) : (
-                    drivers.map(driver => (
-                      <tr key={driver.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-4 font-bold text-slate-800">
-                          {driver.name}
-                        </td>
-                        <td className="p-4">
-                          <a
-                            href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-emerald-600 hover:underline font-medium flex items-center gap-1.5"
-                          >
-                            <Phone size={14} /> {driver.phone}
-                          </a>
-                        </td>
-                        <td className="p-4 text-slate-500 text-xs">
-                          {new Date(driver.created_at).toLocaleDateString('es-PE')}
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                            driver.is_active
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {driver.is_active ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button
-                            onClick={() => handleToggleDriver(driver)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-100 transition-colors"
-                          >
-                            {driver.is_active ? 'Desactivar' : 'Activar'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 3: MENU (GESTIÓN DE MENÚ) ================= */}
-        {adminTab === 'menu' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            <header className="flex justify-between items-center mb-4 sm:mb-8">
-              <div>
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Menú</h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-                  {products.length} {products.length === 1 ? 'plato registrado' : 'platos registrados'} en la carta
-                </p>
-              </div>
-              <button
-                onClick={() => { setEditingProduct(emptyProductForm()); setIsNewProduct(true); }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 sm:gap-2 transition-colors"
-                id="btn-new-product"
-              >
-                <Plus size={15} /> Nuevo Plato
-              </button>
-            </header>
-
-            {Object.keys(groupedProducts).length === 0 ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
-                <p className="font-semibold text-slate-700 text-sm">No hay productos en el menú</p>
-                <p className="text-xs text-slate-400 mt-1 mb-4">Agregue su primer plato para empezar a vender</p>
-                <button
-                  onClick={() => { setEditingProduct(emptyProductForm()); setIsNewProduct(true); }}
-                  className="bg-indigo-600 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
-                >
-                  <Plus size={14} className="inline mr-1" /> Agregar primer plato
-                </button>
-              </div>
-            ) : (
-              Object.entries(groupedProducts).map(([category, items]) => (
-                <section key={category} className="mb-6 sm:mb-8">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                    {category} <span className="font-normal text-slate-400">({items.length})</span>
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                    {items.map(product => (
+                  {/* Mobile Cards View */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {filteredOrders.map(order => (
                       <div
-                        key={product.id}
-                        className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow"
-                        style={{ opacity: product.is_available ? 1 : 0.6 }}
+                        key={order.id}
+                        onClick={() => setSelectedOrder(order)}
+                        className="p-4 space-y-3 hover:bg-slate-50/50 cursor-pointer"
                       >
-                        <label className="toggle flex-shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={product.is_available}
-                            onChange={() => toggleProductAvailability(product)}
-                          />
-                          <span className="toggle-slider" />
-                        </label>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-sm text-slate-800 truncate">{product.name}</h4>
-                            {!product.is_available && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-500">
-                                Agotado
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-base text-slate-900">#{order.order_number}</span>
+                              <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">
+                                {order.origin_system || 'API'}
                               </span>
-                            )}
+                              <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-900 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
+                                <ShieldCheck size={10} className="text-amber-600" />
+                                PIN {order.pin_code}
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-400">{timeAgo(order.created_at)}</p>
                           </div>
-                          {product.description && (
-                            <p className="text-xs text-slate-400 truncate mt-0.5">{product.description}</p>
-                          )}
-                          <div className="flex gap-1 mt-2">
-                            {DAYS.map(d => (
-                              <span
-                                key={d.num}
-                                className={`w-5 h-5 rounded text-[10px] flex items-center justify-center font-bold ${
-                                  product.available_days?.includes(d.num)
-                                    ? 'bg-indigo-100 text-indigo-700'
-                                    : 'bg-slate-100 text-slate-300'
-                                }`}
-                              >
-                                {d.label}
-                              </span>
-                            ))}
-                          </div>
+                          <span className={`badge badge-${order.status} text-[10px]`}>
+                            {STATUS_CONFIG[order.status].icon}
+                            {STATUS_CONFIG[order.status].label}
+                          </span>
                         </div>
 
-                        <span className="font-black text-sm text-slate-800 flex-shrink-0">
-                          S/ {product.price.toFixed(2)}
-                        </span>
+                        <div>
+                          <p className="font-bold text-sm text-slate-800">{order.customer_name}</p>
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                            <MapPin size={12} className="shrink-0 text-slate-400" />
+                            <span className="truncate">{order.delivery_address}</span>
+                          </p>
+                        </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => { setEditingProduct(product); setIsNewProduct(false); }}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(product)}
-                            className="p-1.5 text-red-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                          <span className="font-black text-slate-800 text-sm">S/ {order.total_amount.toFixed(2)}</span>
+                          <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
+                            {STATUS_CONFIG[order.status].next && (
+                              <button
+                                onClick={() => advanceStatus(order)}
+                                disabled={updatingId === order.id}
+                                className="btn btn-indigo text-[11px] py-1.5 px-3"
+                              >
+                                {STATUS_NEXT_LABEL[order.status]}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setTrackingDrawerOrder(order)}
+                              className="btn btn-secondary text-indigo-600 p-1.5"
+                            >
+                              <MapPin size={15} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </section>
-              ))
-            )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 2: FLEET (FLOTA) ================= */}
+        {adminTab === 'fleet' && (
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <header className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Flota Propia</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y disponibilidad</p>
+              </div>
+              <button
+                onClick={() => setShowDriverModal(true)}
+                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm"
+              >
+                + Nuevo Repartidor
+              </button>
+            </header>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {drivers.map(driver => (
+                <div key={driver.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-600 text-base">
+                        {driver.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">{driver.name}</h4>
+                        <a href={`tel:${driver.phone}`} className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 mt-0.5">
+                          <Phone size={12} /> {driver.phone}
+                        </a>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${driver.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                      {driver.is_active ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <button
+                      onClick={() => handleToggleDriver(driver)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                        driver.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {driver.is_active ? 'Desactivar' : 'Activar'}
+                    </button>
+                    <a
+                      href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-emerald-600 font-semibold flex items-center gap-1 hover:underline"
+                    >
+                      <MessageSquare size={13} /> WhatsApp
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 3: B2B API INTEGRATION (PLUG & PLAY) ================= */}
+        {adminTab === 'api_keys' && (
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in space-y-6">
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Integración API REST B2B (DaaS)</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Externaliza y automatiza tus despachos en 5 minutos desde cualquier software o e-commerce</p>
+              </div>
+              <button
+                onClick={() => setShowNewKeyModal(true)}
+                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5"
+              >
+                <Plus size={16} /> Generar Clave API
+              </button>
+            </header>
+
+            {/* Architecture Banner */}
+            <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-2xl p-6 shadow-md border border-indigo-700">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 text-indigo-300">
+                  <Code size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-base text-white">Desacoplamiento B2B Agnóstico</h3>
+                  <p className="text-xs text-indigo-200 leading-relaxed max-w-3xl">
+                    Tu sistema de ventas o ERP envía los despachos a nuestro motor logístico mediante el endpoint <code className="bg-indigo-950 px-1.5 py-0.5 rounded text-amber-300 font-mono">POST /api/v1/orders</code>. Nosotros gestionamos telemetría GPS, KDS, tiempos y validación de PIN anti-fraude.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Active API Keys List */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
+              <h3 className="font-bold text-sm text-slate-800 mb-4 flex items-center gap-2">
+                <Key size={16} className="text-indigo-600" /> Claves de API Activas
+              </h3>
+
+              {apiKeys.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <Key size={32} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm font-medium">No has generado claves de API aún</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Haz clic en &ldquo;Generar Clave API&rdquo; para obtener tus credenciales de integración.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {apiKeys.map(k => (
+                    <div key={k.id} className="py-3.5 flex items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm text-slate-800">{k.name}</p>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${k.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {k.is_active ? 'Activa' : 'Desactivada'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-mono text-slate-400 mt-0.5">Prefijo: {k.key_prefix}</p>
+                        <p className="text-[11px] text-slate-400">Creada: {new Date(k.created_at).toLocaleDateString('es-PE')}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleApiKey(k)}
+                          className={`btn btn-sm text-xs py-1 px-2.5 ${k.is_active ? 'btn-secondary text-amber-700' : 'btn-indigo'}`}
+                        >
+                          {k.is_active ? 'Pausar' : 'Activar'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteApiKey(k)}
+                          className="btn btn-ghost btn-sm text-red-500 p-1.5 hover:bg-red-50"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Code Snippets */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-3.5 bg-slate-50 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800">Ejemplo de Integración (Crear Despacho)</h3>
+                  <p className="text-xs text-slate-500">Envía un requerimiento de entrega en tiempo real a la API</p>
+                </div>
+
+                <div className="flex gap-1 bg-slate-200/70 p-1 rounded-lg">
+                  {(['curl', 'js', 'python'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveCodeTab(tab)}
+                      className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${
+                        activeCodeTab === tab ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {tab.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-5 bg-slate-950 text-slate-200 font-mono text-xs overflow-x-auto">
+                {activeCodeTab === 'curl' && (
+                  <pre>{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: dtk_live_TU_CLAVE_AQUI" \\
+  -d '{
+    "external_order_id": "ORD-9481",
+    "customer": {
+      "name": "Juan Perez",
+      "phone": "+51987654321",
+      "address": "Av. Principal 456, Lima",
+      "reference": "Dpto 302",
+      "lat": -12.1219,
+      "lng": -77.0298
+    },
+    "items": [
+      { "name": "Medicamentos / Zapatillas / Pedido Criollo", "quantity": 1, "unit_price": 45.00 }
+    ],
+    "payment": {
+      "method": "PAGADO_ORIGEN",
+      "total_amount": 45.00
+    },
+    "notes": "Llamar al llegar a la puerta"
+  }'`}</pre>
+                )}
+
+                {activeCodeTab === 'js' && (
+                  <pre>{`const response = await fetch('${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': 'dtk_live_TU_CLAVE_AQUI',
+  },
+  body: JSON.stringify({
+    external_order_id: 'ORD-9481',
+    customer: {
+      name: 'Juan Perez',
+      phone: '+51987654321',
+      address: 'Av. Principal 456, Lima',
+      reference: 'Dpto 302',
+      lat: -12.1219,
+      lng: -77.0298,
+    },
+    items: [
+      { name: 'Paquete de despacho', quantity: 1, unit_price: 45.00 }
+    ],
+    payment: {
+      method: 'PAGADO_ORIGEN',
+      total_amount: 45.00,
+    },
+  }),
+});
+
+const data = await response.json();
+console.log('Despacho creado:', data.order_id, 'PIN:', data.pin_code, 'Tracking:', data.tracking_url);`}</pre>
+                )}
+
+                {activeCodeTab === 'python' && (
+                  <pre>{`import requests
+
+url = "${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders"
+headers = {
+    "Content-Type": "application/json",
+    "x-api-key": "dtk_live_TU_CLAVE_AQUI",
+}
+payload = {
+    "external_order_id": "ORD-9481",
+    "customer": {
+        "name": "Juan Perez",
+        "phone": "+51987654321",
+        "address": "Av. Principal 456, Lima",
+        "reference": "Dpto 302",
+        "lat": -12.1219,
+        "lng": -77.0298,
+    },
+    "items": [{"name": "Paquete logística", "quantity": 1, "unit_price": 45.00}],
+    "payment": {"method": "PAGADO_ORIGEN", "total_amount": 45.00},
+}
+
+response = requests.post(url, json=payload, headers=headers)
+print(response.json())`}</pre>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1164,9 +1313,8 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
               <div>
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800">Métricas y Rendimiento</h2>
-                <p className="text-sm text-slate-500">Análisis operativo del restaurante</p>
+                <p className="text-sm text-slate-500">Análisis operativo del motor logístico</p>
               </div>
-              {/* Range selector */}
               <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                 {([['today', 'Hoy'], ['7days', '7 días'], ['month', 'Este mes'], ['last_month', 'Mes anterior']] as const).map(([key, label]) => (
                   <button
@@ -1185,9 +1333,9 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
               {[
-                { label: 'Pedidos', value: metricsData.totalOrders, icon: <ShoppingBag size={20} />, color: '#4F46E5', bg: '#EEF2FF' },
-                { label: 'Ingresos', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={20} />, color: '#059669', bg: '#ECFDF5' },
-                { label: 'Tiempo promedio', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={20} />, color: '#D97706', bg: '#FFFBEB' },
+                { label: 'Despachos', value: metricsData.totalOrders, icon: <Package size={20} />, color: '#4F46E5', bg: '#EEF2FF' },
+                { label: 'Monto Total', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={20} />, color: '#059669', bg: '#ECFDF5' },
+                { label: 'Tiempo prom. ciclo', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={20} />, color: '#D97706', bg: '#FFFBEB' },
                 { label: 'Tasa de éxito', value: `${metricsData.successRate}%`, icon: <Target size={20} />, color: '#7C3AED', bg: '#F5F3FF' },
               ].map(kpi => (
                 <div key={kpi.label} className="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
@@ -1202,131 +1350,11 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
               ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-              {/* Delivery stats summary */}
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Resumen de Pedidos</h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Entregados', count: metricsData.deliveredCount, color: '#059669', pct: metricsData.totalOrders ? Math.round((metricsData.deliveredCount / metricsData.totalOrders) * 100) : 0 },
-                    { label: 'Cancelados', count: metricsData.cancelledCount, color: '#DC2626', pct: metricsData.totalOrders ? Math.round((metricsData.cancelledCount / metricsData.totalOrders) * 100) : 0 },
-                    { label: 'En proceso', count: metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount, color: '#D97706', pct: metricsData.totalOrders ? Math.round(((metricsData.totalOrders - metricsData.deliveredCount - metricsData.cancelledCount) / metricsData.totalOrders) * 100) : 0 },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-slate-600">{s.label}</span>
-                        <span className="font-bold text-slate-800">{s.count} ({s.pct}%)</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Payment methods */}
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Distribución de Pagos</h3>
-                <div className="space-y-4">
-                  {[
-                    { method: 'EFECTIVO', label: 'Efectivo', color: '#059669', icon: '💵' },
-                    { method: 'YAPE', label: 'Yape', color: '#7C3AED', icon: '📱' },
-                    { method: 'PLIN', label: 'Plin', color: '#2563EB', icon: '📲' },
-                  ].map(pm => {
-                    const count = metricsData.paymentCounts[pm.method] || 0;
-                    const pct = Math.round((count / metricsData.paymentTotal) * 100);
-                    return (
-                      <div key={pm.method}>
-                        <div className="flex justify-between items-center text-xs mb-1.5">
-                          <span className="font-medium text-slate-600 flex items-center gap-1.5">
-                            <span className="text-sm">{pm.icon}</span> {pm.label}
-                          </span>
-                          <span className="font-bold text-slate-800">{count} pedidos ({pct}%)</span>
-                        </div>
-                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: pm.color }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Driver Performance */}
-            {metricsData.driverStats.length > 0 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 mb-6">
-                <h3 className="font-bold text-sm text-slate-700 mb-4">Rendimiento por Repartidor</h3>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="text-left py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Repartidor</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Entregados</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Tiempo Prom.</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Cancelados</th>
-                        <th className="text-center py-2 px-3 font-semibold text-slate-500 text-xs uppercase">Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metricsData.driverStats.map(s => (
-                        <tr key={s.driver.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                          <td className="py-2.5 px-3 font-medium text-slate-800 flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
-                              {s.driver.name.charAt(0)}
-                            </div>
-                            {s.driver.name}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-xs">{s.deliveredCount}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-slate-600">{s.avgTime} min</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${s.cancelledCount > 0 ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-400'}`}>{s.cancelledCount}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                              {s.driver.is_active ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-3">
-                  {metricsData.driverStats.map(s => (
-                    <div key={s.driver.id} className="bg-slate-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
-                            {s.driver.name.charAt(0)}
-                          </div>
-                          <span className="font-semibold text-sm text-slate-800">{s.driver.name}</span>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.driver.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {s.driver.is_active ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div><p className="text-lg font-bold text-emerald-600">{s.deliveredCount}</p><p className="text-[10px] text-slate-500">Entregados</p></div>
-                        <div><p className="text-lg font-bold text-amber-600">{s.avgTime}m</p><p className="text-[10px] text-slate-500">Tiempo prom.</p></div>
-                        <div><p className="text-lg font-bold text-red-500">{s.cancelledCount}</p><p className="text-[10px] text-slate-500">Cancelados</p></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Plan Consumption */}
+            {/* Driver performance & Plan summary */}
             {subscription && (
               <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan</h3>
+                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan DaaS</h3>
                   <span className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
                     subscription.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
                     subscription.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
@@ -1334,10 +1362,9 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                   }`}>{PLAN_LIMITS[subscription.plan]?.label || subscription.plan}</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Orders consumption */}
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Pedidos este mes</span>
+                      <span className="text-slate-500">Despachos este mes</span>
                       <span className="font-bold text-slate-700">{subscription.orders_this_month} / {subscription.max_orders_per_month === 999999 ? 'Ilimitados' : subscription.max_orders_per_month}</span>
                     </div>
                     <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
@@ -1345,12 +1372,11 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                         className="h-full rounded-full transition-all duration-700"
                         style={{
                           width: `${Math.min((subscription.orders_this_month / subscription.max_orders_per_month) * 100, 100)}%`,
-                          backgroundColor: (subscription.orders_this_month / subscription.max_orders_per_month) > 0.9 ? '#DC2626' : (subscription.orders_this_month / subscription.max_orders_per_month) > 0.7 ? '#D97706' : '#4F46E5',
+                          backgroundColor: (subscription.orders_this_month / subscription.max_orders_per_month) > 0.9 ? '#DC2626' : '#4F46E5',
                         }}
                       />
                     </div>
                   </div>
-                  {/* Drivers consumption */}
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-500">Repartidores activos</span>
@@ -1367,16 +1393,374 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-                  <span>Tarifa: <strong className="text-slate-700">S/ {PLAN_LIMITS[subscription.plan]?.price || '---'}/mes</strong></span>
-                  <span>Ciclo inicio: <strong className="text-slate-700">{new Date(subscription.billing_cycle_start).toLocaleDateString('es-PE')}</strong></span>
-                </div>
               </div>
             )}
           </div>
         )}
 
       </main>
+
+      {/* ================= MODAL: NUEVO DESPACHO MANUAL ================= */}
+      {showManualModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <PlusCircle size={20} className="text-indigo-600" />
+                <h3 className="font-bold text-lg text-slate-800">Nuevo Despacho Manual</h3>
+              </div>
+              <button onClick={() => setShowManualModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManualDispatch} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="form-group">
+                  <label className="form-label text-xs font-semibold uppercase">Destinatario *</label>
+                  <input
+                    className="form-input"
+                    placeholder="Nombre y Apellido"
+                    value={manualForm.customer_name}
+                    onChange={e => setManualForm(f => ({ ...f, customer_name: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label text-xs font-semibold uppercase">Teléfono *</label>
+                  <input
+                    className="form-input"
+                    placeholder="999 999 999"
+                    value={manualForm.customer_phone}
+                    onChange={e => setManualForm(f => ({ ...f, customer_phone: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Dirección de Entrega *</label>
+                <input
+                  className="form-input"
+                  placeholder="Av. Ejemplo 123, Distrito"
+                  value={manualForm.delivery_address}
+                  onChange={e => setManualForm(f => ({ ...f, delivery_address: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="form-group">
+                  <label className="form-label text-xs font-semibold uppercase">Referencia</label>
+                  <input
+                    className="form-input"
+                    placeholder="Dpto, puerta, timbre..."
+                    value={manualForm.delivery_reference}
+                    onChange={e => setManualForm(f => ({ ...f, delivery_reference: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label text-xs font-semibold uppercase">Monto Total (S/)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.1"
+                    placeholder="0.00"
+                    value={manualForm.total_amount}
+                    onChange={e => setManualForm(f => ({ ...f, total_amount: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Descripción del Paquete</label>
+                <input
+                  className="form-input"
+                  placeholder="Ej. 1x Zapatillas Talla 42 / Medicamentos"
+                  value={manualForm.item_description}
+                  onChange={e => setManualForm(f => ({ ...f, item_description: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Método de Pago</label>
+                <select
+                  className="form-input form-select"
+                  value={manualForm.payment_method}
+                  onChange={e => setManualForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
+                >
+                  <option value="PAGADO_ORIGEN">Pagado en Origen (No cobrar)</option>
+                  <option value="EFECTIVO">Efectivo contraentrega</option>
+                  <option value="YAPE">Yape contraentrega</option>
+                  <option value="PLIN">Plin contraentrega</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowManualModal(false)}
+                  className="btn btn-secondary flex-1"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingManual}
+                  className="btn btn-indigo flex-1"
+                >
+                  {creatingManual ? 'Creando...' : 'Crear Despacho'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: VALIDAR PIN DE ENTREGA ================= */}
+      {pinModalOrder && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-amber-50 border-2 border-amber-400 flex items-center justify-center mx-auto text-amber-700">
+              <ShieldCheck size={30} />
+            </div>
+
+            <div>
+              <h3 className="font-bold text-lg text-slate-800">Validación de PIN Anti-Fraude</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Ingrese el código PIN de 4 dígitos proporcionado por el destinatario para confirmar la entrega de la orden <strong className="text-slate-800">#{pinModalOrder.order_number}</strong>:
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmPinDelivery} className="space-y-4">
+              <input
+                type="text"
+                maxLength={4}
+                autoFocus
+                placeholder="0000"
+                value={pinInput}
+                onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))}
+                className="w-full text-center text-3xl tracking-[0.3em] font-mono font-black py-3 rounded-xl border-2 border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                required
+              />
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPinModalOrder(null)}
+                  className="btn btn-secondary flex-1 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={validatingPin || pinInput.length !== 4}
+                  className="btn btn-indigo flex-1 text-xs font-bold"
+                >
+                  {validatingPin ? 'Validando...' : 'Validar y Entregar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: CANCELACIÓN ESTRUCTURADA ================= */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-red-600 border-b border-slate-100 pb-3">
+              <AlertTriangle size={22} />
+              <h3 className="font-bold text-base text-slate-900">Cancelar Despacho #{cancelModalOrder.order_number}</h3>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Seleccione el motivo de rechazo estructurado para notificar el cese del despacho al sistema de origen:
+            </p>
+
+            <div className="space-y-3">
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Motivo Estructurado *</label>
+                <select
+                  className="form-input form-select"
+                  value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value as CancellationReason)}
+                >
+                  {(Object.entries(CANCELLATION_REASONS) as [CancellationReason, string][]).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Detalles / Nota Opcional</label>
+                <textarea
+                  className="form-input text-xs"
+                  rows={2}
+                  placeholder="Detalles adicionales para auditoría..."
+                  value={cancelNote}
+                  onChange={e => setCancelNote(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCancelModalOrder(null)}
+                className="btn btn-secondary flex-1 text-xs"
+              >
+                Regresar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancellation}
+                disabled={cancelling}
+                className="btn bg-red-600 hover:bg-red-700 text-white flex-1 text-xs font-bold"
+              >
+                {cancelling ? 'Cancelando...' : 'Confirmar Cancelación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: GENERAR NUEVA API KEY ================= */}
+      {showNewKeyModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-3">
+              <Key size={20} />
+              <h3 className="font-bold text-base text-slate-900">Generar Clave API B2B</h3>
+            </div>
+
+            <form onSubmit={handleGenerateApiKey} className="space-y-4">
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold uppercase">Nombre Identificador</label>
+                <input
+                  className="form-input"
+                  placeholder="Ej. Servidor Producción Shopify / ERP"
+                  value={newKeyName}
+                  onChange={e => setNewKeyName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Se generará una clave secreta <code className="bg-slate-100 px-1 font-mono">dtk_live_...</code> con acceso de escritura para despachos.
+              </p>
+
+              <div className="flex gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setShowNewKeyModal(false)} className="btn btn-secondary flex-1 text-xs">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={generatingKey} className="btn btn-indigo flex-1 text-xs font-bold">
+                  {generatingKey ? 'Generando...' : 'Generar Clave'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: MOSTRAR RAW API KEY RECIÉN CREADA ================= */}
+      {rawKeyDisplay && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-emerald-600 border-b border-slate-100 pb-3">
+              <CheckCircle size={22} />
+              <h3 className="font-bold text-base text-slate-900">Clave API Generada</h3>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
+              <strong>Importante:</strong> Copie esta clave ahora mismo. Por motivos de seguridad, no volverá a mostrarse en su totalidad.
+            </div>
+
+            <div className="form-group">
+              <label className="form-label text-xs font-semibold uppercase text-slate-500">Token Secreto ({rawKeyDisplay.name})</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={rawKeyDisplay.rawKey}
+                  className="form-input font-mono text-xs bg-slate-50 text-indigo-900 select-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyRawKey}
+                  className="btn btn-indigo text-xs py-2 px-3 shrink-0 flex items-center gap-1"
+                >
+                  {copiedKey ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedKey ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRawKeyDisplay(null)}
+                className="btn btn-secondary w-full text-xs font-bold"
+              >
+                He guardado mi clave de forma segura
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: NUEVO REPARTIDOR ================= */}
+      {showDriverModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800">Registrar Repartidor</h3>
+              <button onClick={() => setShowDriverModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateDriver} className="space-y-3 sm:space-y-4">
+              <div className="form-group">
+                <label className="form-label">Nombre Completo</label>
+                <input
+                  className="form-input"
+                  placeholder="Ej. Carlos Rodríguez"
+                  value={newDriverName}
+                  onChange={e => setNewDriverName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">WhatsApp / Teléfono</label>
+                <input
+                  className="form-input"
+                  type="tel"
+                  placeholder="Ej. 987654321"
+                  value={newDriverPhone}
+                  onChange={e => setNewDriverPhone(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDriverModal(false)}
+                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDriver}
+                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
+                >
+                  {savingDriver ? 'Guardando...' : 'Registrar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================= ORDER DETAIL DRAWER ================= */}
       {selectedOrder && (
@@ -1385,7 +1769,12 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
           <div className="drawer-panel animate-slide-in">
             <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
               <div>
-                <h3 className="font-bold text-lg sm:text-xl text-slate-800">Orden #{selectedOrder.order_number}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg sm:text-xl text-slate-800">Despacho #{selectedOrder.order_number}</h3>
+                  <span className="text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">
+                    {selectedOrder.origin_system || 'API'}
+                  </span>
+                </div>
                 <p className="text-xs text-slate-400 mt-0.5">{new Date(selectedOrder.created_at).toLocaleString('es-PE')}</p>
               </div>
               <button onClick={() => setSelectedOrder(null)} className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60">
@@ -1394,6 +1783,20 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             </div>
 
             <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
+              {/* Security PIN Banner */}
+              <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/80 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck size={20} className="text-amber-700 flex-shrink-0" />
+                  <div>
+                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">PIN Anti-Fraude</span>
+                    <span className="text-xs text-amber-700">Requerido para entregar</span>
+                  </div>
+                </div>
+                <span className="font-mono text-xl font-black tracking-widest text-amber-950 bg-white border border-amber-300 px-3 py-1 rounded-lg">
+                  {selectedOrder.pin_code || '----'}
+                </span>
+              </div>
+
               {/* Status Action */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                 <div className="flex justify-between items-center">
@@ -1403,6 +1806,12 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                   </span>
                   <span className="font-bold text-slate-800 text-sm">S/ {selectedOrder.total_amount.toFixed(2)}</span>
                 </div>
+
+                {selectedOrder.cancellation_reason && (
+                  <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
+                    <strong>Motivo de Cancelación:</strong> {selectedOrder.cancellation_reason}
+                  </div>
+                )}
 
                 {STATUS_CONFIG[selectedOrder.status].next && (
                   <button
@@ -1454,7 +1863,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
               {/* Customer Info */}
               <div className="space-y-2">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Datos del Cliente</h4>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Destinatario</h4>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-sm text-slate-700">
                   <div className="flex items-center gap-2"><User size={15} className="text-slate-400" /> {selectedOrder.customer_name}</div>
                   <div className="flex items-center gap-2"><Phone size={15} className="text-slate-400" /> {selectedOrder.customer_phone}</div>
@@ -1466,10 +1875,10 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                 </div>
               </div>
 
-              {/* Order Items */}
+              {/* Package Items */}
               {selectedOrder.order_items && (
                 <div className="space-y-2">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Detalle del Pedido</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Contenido del Despacho</h4>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 divide-y divide-slate-200 text-sm">
                     {selectedOrder.order_items.map(item => (
                       <div key={item.id} className="py-2 flex justify-between first:pt-0 last:pb-0">
@@ -1509,8 +1918,8 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Bitácora Operativa</h4>
               <div className="relative pl-6 space-y-6 border-l-2 border-slate-200">
-                {['RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO'].map(s => {
-                  const statuses = ['RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO'];
+                {['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO', 'EN_CAMINO', 'ENTREGADO'].map(s => {
+                  const statuses = ['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO', 'EN_CAMINO', 'ENTREGADO'];
                   const currentIdx = statuses.indexOf(trackingDrawerOrder.status);
                   const stepIdx = statuses.indexOf(s);
                   const done = stepIdx <= currentIdx;
@@ -1541,167 +1950,6 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             </div>
           </div>
         </>
-      )}
-
-      {/* ================= MODAL: NUEVO REPARTIDOR ================= */}
-      {showDriverModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-8 shadow-2xl space-y-4 sm:space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg sm:text-xl font-bold text-slate-800">Registrar Repartidor</h3>
-              <button onClick={() => setShowDriverModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateDriver} className="space-y-3.5 sm:space-y-4">
-              <div className="form-group">
-                <label className="form-label">Nombre Completo</label>
-                <input
-                  className="form-input"
-                  placeholder="Ej. Carlos Rodríguez"
-                  value={newDriverName}
-                  onChange={e => setNewDriverName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">WhatsApp / Teléfono</label>
-                <input
-                  className="form-input"
-                  type="tel"
-                  placeholder="Ej. 987654321"
-                  value={newDriverPhone}
-                  onChange={e => setNewDriverPhone(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowDriverModal(false)}
-                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingDriver}
-                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
-                >
-                  {savingDriver ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: EDITAR / NUEVO PLATO ================= */}
-      {editingProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg sm:text-xl font-bold text-slate-800">
-                {isNewProduct ? 'Nuevo Plato' : 'Editar Plato'}
-              </h3>
-              <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="form-group">
-                <label className="form-label">Nombre del plato *</label>
-                <input
-                  className="form-input"
-                  value={editingProduct.name || ''}
-                  onChange={e => setEditingProduct(p => ({ ...p, name: e.target.value }))}
-                  placeholder="Ej. Lomo Saltado Criollo"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Descripción</label>
-                <textarea
-                  className="form-input"
-                  rows={2}
-                  value={editingProduct.description || ''}
-                  onChange={e => setEditingProduct(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Ingredientes o descripción breve"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Categoría</label>
-                  <select
-                    className="form-input form-select"
-                    value={editingProduct.category || 'A la Carta'}
-                    onChange={e => setEditingProduct(p => ({ ...p, category: e.target.value }))}
-                  >
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Precio (S/) *</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    step="0.10"
-                    min="0"
-                    value={editingProduct.price || ''}
-                    onChange={e => setEditingProduct(p => ({ ...p, price: parseFloat(e.target.value) || 0 }))}
-                    placeholder="35.90"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="form-label mb-2 block">Días de disponibilidad</label>
-                <div className="flex gap-2">
-                  {DAYS.map(d => {
-                    const isSelected = editingProduct.available_days?.includes(d.num);
-                    return (
-                      <button
-                        key={d.num}
-                        type="button"
-                        onClick={() => {
-                          const current = editingProduct.available_days || [];
-                          const updated = current.includes(d.num)
-                            ? current.filter(x => x !== d.num)
-                            : [...current, d.num].sort();
-                          setEditingProduct(p => ({ ...p, available_days: updated }));
-                        }}
-                        className={`w-9 h-9 rounded-lg font-bold text-xs transition-colors ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                        }`}
-                      >
-                        {d.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="btn btn-secondary flex-1"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={savingProduct}
-                  onClick={handleSaveProduct}
-                  className="btn btn-indigo flex-1"
-                >
-                  {savingProduct ? 'Guardando...' : <><Save size={16} /> Guardar Plato</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
     </div>
