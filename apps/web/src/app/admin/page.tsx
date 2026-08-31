@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import AdminDashboardClient from './AdminDashboardClient';
-import type { Driver, Restaurant } from '@/lib/supabase/types';
+import type { Driver, Restaurant, Subscription } from '@/lib/supabase/types';
 
 export const metadata: Metadata = {
   title: 'Panel de Despacho',
@@ -15,11 +15,32 @@ export default async function AdminPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('*')
-    .limit(1)
-    .single();
+  // Cargar vinculación usuario-restaurante
+  const { data: restaurantUser } = await supabase
+    .from('restaurant_users')
+    .select('restaurant_id, role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  let restaurant: Restaurant | null = null;
+
+  if (restaurantUser) {
+    // Multi-tenant: cargar el restaurante vinculado al usuario
+    const { data } = await supabase
+      .from('restaurants')
+      .select('*')
+      .eq('id', restaurantUser.restaurant_id)
+      .single();
+    restaurant = data as Restaurant | null;
+  } else {
+    // Fallback para compatibilidad: si no hay registro en restaurant_users, tomar el primero
+    const { data } = await supabase
+      .from('restaurants')
+      .select('*')
+      .limit(1)
+      .single();
+    restaurant = data as Restaurant | null;
+  }
 
   if (!restaurant) {
     return (
@@ -37,13 +58,22 @@ export default async function AdminPage() {
   const { data: drivers } = await supabase
     .from('drivers')
     .select('*')
+    .eq('restaurant_id', restaurant.id);
+
+  // Cargar suscripción activa
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('*')
     .eq('restaurant_id', restaurant.id)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .maybeSingle();
 
   return (
     <AdminDashboardClient
-      restaurant={restaurant as Restaurant}
+      restaurant={restaurant}
       drivers={(drivers as Driver[]) || []}
+      subscription={subscription as Subscription | null}
+      userRole={restaurantUser?.role || 'owner'}
     />
   );
 }

@@ -1,6 +1,7 @@
 export type OrderStatus = 'RECIBIDO' | 'EN_PREPARACION' | 'LISTO' | 'EN_CAMINO' | 'ENTREGADO' | 'CANCELADO';
 export type PaymentMethod = 'EFECTIVO' | 'YAPE' | 'PLIN';
 export type PlanType = 'STARTER' | 'GROWTH' | 'ENTERPRISE';
+export type UserRole = 'superadmin' | 'owner' | 'manager';
 
 export interface Restaurant {
   id: string;
@@ -8,10 +9,14 @@ export interface Restaurant {
   slug: string;
   phone: string;
   address: string;
+  lat: number | null;
+  lng: number | null;
+  max_delivery_radius_km: number;
   logo_url: string | null;
   cover_image_url: string | null;
   brand_color: string;
   is_open: boolean;
+  business_hours: Record<string, { open: string; close: string }> | null;
   created_at: string;
 }
 
@@ -24,6 +29,14 @@ export interface Subscription {
   orders_this_month: number;
   billing_cycle_start: string;
   is_active: boolean;
+  created_at: string;
+}
+
+export interface RestaurantUser {
+  id: string;
+  user_id: string;
+  restaurant_id: string;
+  role: UserRole;
   created_at: string;
 }
 
@@ -96,3 +109,10 @@ export interface CartItem {
   product: Product;
   quantity: number;
 }
+
+/* Plan limits reference */
+export const PLAN_LIMITS: Record<PlanType, { label: string; maxDrivers: number; maxOrders: number; price: number }> = {
+  STARTER:    { label: 'Starter',    maxDrivers: 2,  maxOrders: 300,   price: 99 },
+  GROWTH:     { label: 'Growth',     maxDrivers: 6,  maxOrders: 1200,  price: 199 },
+  ENTERPRISE: { label: 'Enterprise', maxDrivers: 999, maxOrders: 999999, price: 399 },
+};
