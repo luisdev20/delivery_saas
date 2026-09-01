@@ -47,26 +47,27 @@ class LocationService {
 
     if (hasPermission) {
       try {
-        // Try last known first for immediate response
         final lastKnown = await Geolocator.getLastKnownPosition();
-        if (lastKnown != null) {
+        if (lastKnown != null && _isRealisticPosition(lastKnown, defaultLat)) {
           _lastKnownPosition = lastKnown;
           return lastKnown;
         }
 
-        // Try current position with timeout
-        _lastKnownPosition = await Geolocator.getCurrentPosition(
+        final curr = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.medium,
-            timeLimit: Duration(seconds: 4),
+            timeLimit: Duration(seconds: 3),
           ),
         );
-        return _lastKnownPosition;
+        if (_isRealisticPosition(curr, defaultLat)) {
+          _lastKnownPosition = curr;
+          return _lastKnownPosition;
+        }
       } catch (_) {}
     }
 
-    // Fallback position for emulator or when GPS is warming up
-    _lastKnownPosition ??= Position(
+    // Fallback position in Peru for emulator simulation
+    _lastKnownPosition = Position(
       latitude: defaultLat,
       longitude: defaultLng,
       timestamp: DateTime.now(),
@@ -80,6 +81,11 @@ class LocationService {
     );
 
     return _lastKnownPosition;
+  }
+
+  bool _isRealisticPosition(Position pos, double targetLat) {
+    if (targetLat < 0 && pos.latitude > 0) return false; // California emulator default
+    return true;
   }
 
   void startTracking({

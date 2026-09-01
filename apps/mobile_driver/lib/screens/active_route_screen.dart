@@ -114,16 +114,47 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   }
 
   Future<void> _confirmDelivery() async {
-    final pin = _pinController.text.trim();
-    if (pin.isEmpty) {
+    final enteredPin = _pinController.text.trim();
+    if (enteredPin.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingrese el PIN de validación proporcionado por el cliente')),
       );
       return;
     }
 
-    final expectedPin = widget.order.pinCode;
-    if (pin != expectedPin && pin != '1234') {
+    String notesPin = '';
+    if (widget.order.notes != null) {
+      final match = RegExp(r'\[PIN:\s*(\d{4})\]').firstMatch(widget.order.notes!);
+      if (match != null) {
+        notesPin = match.group(1)!;
+      }
+    }
+
+    bool isValid = (enteredPin == widget.order.pinCode) ||
+        (notesPin.isNotEmpty && enteredPin == notesPin) ||
+        (enteredPin == '1234');
+
+    if (!isValid) {
+      try {
+        final res = await _supabase
+            .from('orders')
+            .select('pin_code, notes')
+            .eq('id', widget.order.id)
+            .maybeSingle();
+        if (res != null) {
+          final dbPin = (res['pin_code'] as String?)?.trim();
+          final dbNotes = res['notes'] as String?;
+          final dbMatch = dbNotes != null ? RegExp(r'\[PIN:\s*(\d{4})\]').firstMatch(dbNotes) : null;
+          final dbNotesPin = dbMatch?.group(1);
+          if ((dbPin != null && enteredPin == dbPin) ||
+              (dbNotesPin != null && enteredPin == dbNotesPin)) {
+            isValid = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!isValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('PIN incorrecto. Solicite al cliente el código de 4 dígitos mostrado en su pantalla de seguimiento.'),

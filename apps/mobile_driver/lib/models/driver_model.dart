@@ -19,13 +19,15 @@ class DriverModel {
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
     return DriverModel(
-      id: json['id'] as String,
+      id: (json['id'] as String?) ?? '',
       userId: json['user_id'] as String?,
-      restaurantId: json['restaurant_id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
+      restaurantId: (json['restaurant_id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? 'Repartidor',
+      phone: (json['phone'] as String?) ?? '',
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
 
