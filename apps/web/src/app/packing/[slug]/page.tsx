@@ -32,10 +32,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PackingPage({ params }: Props) {
   const { slug } = await params;
   const cookieStore = await cookies();
-  const userRole = cookieStore.get('dtk_role')?.value || 'owner';
+  const userRole = cookieStore.get('dtk_role')?.value;
   const userTenant = cookieStore.get('dtk_tenant')?.value;
 
-  // Tenant Security Guard:
+  // Packing Security Guard: Requires packing session for this specific tenant (or superadmin)
+  if (!userRole || (userRole !== 'superadmin' && userRole !== 'packing' && userRole !== 'owner')) {
+    redirect('/packing');
+  }
   if (userRole !== 'superadmin' && userTenant && userTenant !== slug && userTenant !== 'all') {
     redirect(`/packing/${userTenant}`);
   }

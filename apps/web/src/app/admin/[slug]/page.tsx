@@ -35,6 +35,11 @@ export default async function AdminMerchantPage({ params }: Props) {
   const userRole = cookieStore.get('dtk_role')?.value || 'owner';
   const userTenant = cookieStore.get('dtk_tenant')?.value;
 
+  // Role Guard: Si es usuario de empaque, redirigir a su estación de empaque
+  if (userRole === 'packing') {
+    redirect(`/packing/${userTenant || slug}`);
+  }
+
   // Multi-Tenant RBAC Security Guard:
   // Si el usuario no es superadmin y no coincide con el slug del comercio en URL, bloquear acceso
   if (userRole !== 'superadmin' && userTenant && userTenant !== slug && userTenant !== 'all') {

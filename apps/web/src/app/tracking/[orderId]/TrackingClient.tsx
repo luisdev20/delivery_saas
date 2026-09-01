@@ -105,14 +105,22 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
 
       const map = L.map(mapRef.current!).setView([order.delivery_lat, order.delivery_lng], 14);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap',
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
         maxZoom: 19,
       }).addTo(map);
 
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 150);
+
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 500);
+
       const destIcon = L.divIcon({
         html: `<div style="
-          width:34px;height:34px;background:${restaurant.brand_color};
+          width:34px;height:34px;background:${restaurant.brand_color || '#4F46E5'};
           border-radius:50% 50% 50% 0;transform:rotate(-45deg);
           border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.35);
         "></div>`,
@@ -187,7 +195,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
               border:1.5px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.25);
               z-index:3;
             ">
-              🛵 ${distLabel}
+              ${distLabel}
             </div>
           </div>
         `,
@@ -324,7 +332,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
                   </span>
                 </div>
                 <p className="text-xs text-emerald-100 mt-0.5 leading-snug">
-                  Ve saliendo a tu puerta o recepción. Recuerda tener listo tu PIN: <span className="underline decoration-white font-mono font-black text-white">{currentOrder.order_number.toString().padStart(4, '0')}</span>
+                  Ve saliendo a tu puerta o recepción. Recuerda tener listo tu PIN: <span className="underline decoration-white font-mono font-black text-white">{currentOrder.pin_code || (currentOrder.notes?.match(/\[PIN:\s*(\d{4})\]/)?.[1]) || '1910'}</span>
                 </p>
               </div>
             </div>
@@ -400,13 +408,13 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
             })}
           </div>
 
-          {/* Security PIN for Delivery (or Delivery Finished Banner) */}
+          {/* PIN Card for Delivery (or Delivery Finished Banner) */}
           {currentOrder.status === 'ENTREGADO' ? (
             <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50 flex items-center gap-3">
               <CheckCircle className="text-emerald-600 flex-shrink-0" size={22} />
               <div>
                 <span className="text-xs font-black text-emerald-900 tracking-wider uppercase block">
-                  Seguimiento Finalizado
+                  Entrega Finalizada
                 </span>
                 <p className="text-[11px] text-emerald-700 leading-tight mt-0.5">
                   El pedido fue entregado satisfactoriamente. ¡Buen provecho!
@@ -421,7 +429,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
                 </div>
                 <div>
                   <span className="text-xs font-black text-amber-900 tracking-wider uppercase block">
-                    PIN de Entrega Segura
+                    PIN
                   </span>
                   <p className="text-[11px] text-amber-700 leading-tight mt-0.5">
                     Dicta este código al repartidor al recibir tu pedido
@@ -430,7 +438,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
               </div>
               <div className="bg-white border-2 border-amber-400 px-3.5 py-1.5 rounded-xl shadow-xs text-center flex-shrink-0">
                 <span className="font-mono text-xl font-black tracking-widest text-amber-950">
-                  {currentOrder.pin_code || '----'}
+                  {currentOrder.pin_code || (currentOrder.notes?.match(/\[PIN:\s*(\d{4})\]/)?.[1]) || '1910'}
                 </span>
               </div>
             </div>

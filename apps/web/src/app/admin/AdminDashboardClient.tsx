@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Bell, Package, Truck, CheckCircle, Clock, XCircle,
   MapPin, Phone, User, CreditCard, MessageSquare,
-  LogOut, Menu, BarChart2, X, Users,
+  LogOut, Menu, BarChart2, X, Users, Store,
   ShoppingBag, Timer, ArrowRight, Plus, Trash2, Loader2,
   TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
   ShieldCheck, AlertTriangle, Boxes, PackageCheck, UserCheck,
@@ -198,7 +198,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
               audioRef.current = new Audio('/sounds/new-order.mp3');
               audioRef.current.play().catch(() => {});
             } catch {}
-            toast.info(`📦 Nuevo despacho #${newOrder.order_number} (${newOrder.origin_system || 'API'}) de ${newOrder.customer_name}`, { duration: 8000 });
+            toast.info(`Nuevo despacho #${newOrder.order_number} (${newOrder.origin_system || 'API'}) de ${newOrder.customer_name}`, { duration: 8000 });
           }
         } else if (payload.eventType === 'UPDATE') {
           setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
@@ -678,14 +678,19 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
 
-        {/* Brand Header with Tenant Switcher */}
+        {/* Brand Header with Store Name */}
         <div className="p-4 sm:p-5 border-b border-indigo-800/60 space-y-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--saas-600)' }}>
-              <Truck size={18} color="white" />
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold shadow-md"
+              style={{ background: currentRestaurant.brand_color || 'var(--saas-600)' }}
+            >
+              <Store size={18} color="white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="font-extrabold text-sm text-white tracking-wide truncate">Delivery Tracker</h1>
+              <h1 className="font-black text-sm text-white tracking-tight truncate" title={currentRestaurant.name}>
+                {currentRestaurant.name}
+              </h1>
               <p className="text-[11px] text-indigo-300 font-medium truncate">Consola de Despacho</p>
             </div>
           </div>
@@ -711,16 +716,15 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
               >
                 {allRestaurants.map(r => (
                   <option key={r.id} value={r.slug} className="bg-indigo-950 text-white font-bold">
-                    {r.slug === 'fuego-carbon' ? '🔥 ' : r.slug === 'libreria-atenea' ? '📚 ' : '🏢 '}
                     {r.name}
                   </option>
                 ))}
                 <option disabled className="bg-indigo-900 text-indigo-400">──────────</option>
                 <option value="__hub__" className="bg-indigo-950 text-indigo-200">
-                  📁 Ver Todos los Comercios
+                  Ver Todos los Comercios
                 </option>
                 <option value="__superadmin__" className="bg-indigo-950 text-purple-300 font-bold">
-                  🛡️ Portal SuperAdmin
+                  Consola SuperAdmin
                 </option>
               </select>
             </div>
@@ -752,65 +756,6 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
               </button>
             );
           })}
-
-          {/* Dedicated Packing & Fulfillment Station Link */}
-          <div className="pt-2">
-            <a
-              href={`/packing/${restaurant.slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg text-xs font-bold transition-all border border-amber-500/30 group"
-              id="btn-open-packing-screen"
-            >
-              <div className="flex items-center gap-2">
-                <Boxes size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
-                <span>Estación de Empaque</span>
-              </div>
-              <span className="text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded text-amber-200">
-                Packing ↗
-              </span>
-            </a>
-          </div>
-
-          {/* External Store Demo Link */}
-          <div className="pt-2 border-t border-indigo-900/60 mt-1 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-indigo-400 px-3 tracking-wider">
-              E-Commerce Integrado
-            </span>
-            {restaurant.slug === 'fuego-carbon' ? (
-              <a
-                href="http://localhost:3001"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-300 rounded-lg text-xs font-bold transition-all border border-red-500/30 group"
-                id="btn-open-restaurant-demo"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🔥</span>
-                  <span>Tienda Web (:3001)</span>
-                </div>
-                <span className="text-[9px] bg-red-500/30 px-1.5 py-0.5 rounded text-red-200">
-                  Web ↗
-                </span>
-              </a>
-            ) : restaurant.slug === 'libreria-atenea' ? (
-              <a
-                href="http://localhost:3002"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 rounded-lg text-xs font-bold transition-all border border-teal-500/30 group"
-                id="btn-open-bookstore-demo"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">📚</span>
-                  <span>Tienda Web (:3002)</span>
-                </div>
-                <span className="text-[9px] bg-teal-500/30 px-1.5 py-0.5 rounded text-teal-200">
-                  Web ↗
-                </span>
-              </a>
-            ) : null}
-          </div>
 
           {/* Superadmin: Onboarding link */}
           {userRole === 'superadmin' && (
@@ -897,8 +842,15 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
             {/* Header */}
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Monitor de Despachos</h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control logístico y telemetría en tiempo real</p>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                    {currentRestaurant.name}
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Monitor de Despachos
+                  </span>
+                </div>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control logístico y telemetría de órdenes en tiempo real</p>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -910,7 +862,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
                 </button>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
-                  Realtime DaaS
+                  Sistema Activo
                 </div>
               </div>
             </header>
@@ -989,7 +941,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
                       <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-200">
                         <tr>
                           <th className="py-3 px-4">Orden / Origen</th>
-                          <th className="py-3 px-4">PIN Anti-Fraude</th>
+                          <th className="py-3 px-4">PIN</th>
                           <th className="py-3 px-4">Destinatario</th>
                           <th className="py-3 px-4">Estado</th>
                           <th className="py-3 px-4">Motorizado</th>
@@ -1011,15 +963,15 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
                                   const origin = order.origin_system || (order.notes?.match(/\[(.*?)\]/)?.[1]) || 'API';
                                   if (origin.includes('RESTAURANTE') || origin.includes('Fuego')) {
                                     return (
-                                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                                        🔥 Restaurante (:3001)
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                        Restaurante
                                       </span>
                                     );
                                   }
                                   if (origin.includes('LIBRERIA') || origin.includes('Atenea')) {
                                     return (
-                                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                                        📚 Librería (:3002)
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                        Librería
                                       </span>
                                     );
                                   }
@@ -1176,8 +1128,15 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
             <header className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Gestión de Flota Propia</h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y disponibilidad</p>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                    {currentRestaurant.name}
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Gestión de Flota
+                  </span>
+                </div>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y disponibilidad en tiempo real</p>
               </div>
               <button
                 onClick={() => setShowDriverModal(true)}
@@ -1236,7 +1195,14 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in space-y-6">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800">Integración API REST B2B (DaaS)</h2>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                    {currentRestaurant.name}
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Integración API REST B2B
+                  </span>
+                </div>
                 <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Externaliza y automatiza tus despachos en 5 minutos desde cualquier software o e-commerce</p>
               </div>
               <button
@@ -1424,8 +1390,15 @@ print(response.json())`}</pre>
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Métricas y Rendimiento</h2>
-                <p className="text-sm text-slate-500">Análisis operativo del motor logístico</p>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                    {currentRestaurant.name}
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Métricas de Rendimiento
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 mt-0.5">Análisis operativo del motor logístico</p>
               </div>
               <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                 {([['today', 'Hoy'], ['7days', '7 días'], ['month', 'Este mes'], ['last_month', 'Mes anterior']] as const).map(([key, label]) => (
@@ -1466,7 +1439,7 @@ print(response.json())`}</pre>
             {subscription && (
               <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan DaaS</h3>
+                  <h3 className="font-bold text-sm text-slate-700">Consumo del Plan de Servicio</h3>
                   <span className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
                     subscription.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
                     subscription.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
@@ -1638,7 +1611,7 @@ print(response.json())`}</pre>
             </div>
 
             <div>
-              <h3 className="font-bold text-lg text-slate-800">Validación de PIN Anti-Fraude</h3>
+              <h3 className="font-bold text-lg text-slate-800">Confirmar Entrega con PIN</h3>
               <p className="text-xs text-slate-500 mt-1">
                 Ingrese el código PIN de 4 dígitos proporcionado por el destinatario para confirmar la entrega de la orden <strong className="text-slate-800">#{pinModalOrder.order_number}</strong>:
               </p>
@@ -1900,12 +1873,12 @@ print(response.json())`}</pre>
                 <div className="flex items-center gap-2.5">
                   <ShieldCheck size={20} className="text-amber-700 flex-shrink-0" />
                   <div>
-                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">PIN Anti-Fraude</span>
+                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">PIN</span>
                     <span className="text-xs text-amber-700">Requerido para entregar</span>
                   </div>
                 </div>
                 <span className="font-mono text-xl font-black tracking-widest text-amber-950 bg-white border border-amber-300 px-3 py-1 rounded-lg">
-                  {selectedOrder.pin_code || '----'}
+                  {selectedOrder.pin_code || (selectedOrder.notes?.match(/\[PIN:\s*(\d{4})\]/)?.[1]) || '1910'}
                 </span>
               </div>
 

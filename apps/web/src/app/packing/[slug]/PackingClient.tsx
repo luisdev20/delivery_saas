@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Boxes, Bell, CheckCircle2, Clock, Volume2, VolumeX,
   Maximize2, Minimize2, PackageCheck, AlertCircle,
-  Check, Layers, Sparkles, UserCheck, ShieldCheck,
+  Check, Layers, Sparkles, UserCheck, ShieldCheck, LogOut,
 } from 'lucide-react';
 import type { Restaurant, Order, OrderStatus } from '@/lib/supabase/types';
 
@@ -108,7 +108,7 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
           if (newOrder) {
             setOrders(prev => [newOrder as Order, ...prev]);
             if (soundEnabled) playPackingChime();
-            toast.info(`📦 ¡Nuevo requerimiento de despacho #${newOrder.order_number}!`);
+            toast.info(`Nuevo requerimiento de despacho #${newOrder.order_number}`);
           }
         } else if (payload.eventType === 'UPDATE') {
           const updated = payload.new as Order;
@@ -158,6 +158,17 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
 
   const toggleItemCheck = (itemId: string) => {
     setCheckedItems(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
+
+  const handlePackingLogout = () => {
+    document.cookie = 'dtk_role=; path=/; max-age=0';
+    document.cookie = 'dtk_tenant=; path=/; max-age=0';
+    try {
+      localStorage.removeItem('dtk_user_email');
+      localStorage.removeItem('dtk_role');
+      localStorage.removeItem('dtk_tenant');
+    } catch {}
+    window.location.href = '/packing';
   };
 
   const packingNuevos = useMemo(() => orders.filter(o => o.status === 'RECIBIDO'), [orders]);
@@ -230,6 +241,15 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
             title="Pantalla Completa"
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+
+          <button
+            onClick={handlePackingLogout}
+            className="p-1.5 sm:p-2 rounded-lg border border-indigo-700/80 bg-indigo-900/80 text-rose-300 hover:bg-rose-950/60 hover:text-rose-200 transition-colors flex items-center gap-1 text-xs font-bold"
+            title="Cerrar Turno de Empaque"
+          >
+            <LogOut size={16} />
+            <span className="hidden sm:inline">Salir</span>
           </button>
         </div>
       </header>
@@ -327,15 +347,15 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
                               const origin = order.origin_system || (order.notes?.match(/\[(.*?)\]/)?.[1]) || 'API';
                               if (origin.includes('RESTAURANTE') || origin.includes('Fuego')) {
                                 return (
-                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                                    🔥 Restaurante
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                    Restaurante
                                   </span>
                                 );
                               }
                               if (origin.includes('LIBRERIA') || origin.includes('Atenea')) {
                                 return (
-                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                                    📚 Librería
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                    Librería
                                   </span>
                                 );
                               }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import {
   Store, Boxes, ArrowRight, ShieldCheck, Plus, LogOut,
@@ -12,8 +13,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: 'Seleccionar Comercio — Delivery Tracker DaaS',
-  description: 'Selecciona el comercio o tenant para ingresar a su consola de despacho independiente.',
+  title: 'Seleccionar Comercio — Delivery Tracker',
+  description: 'Selecciona el comercio para ingresar a su consola de despacho independiente.',
 };
 
 interface Props {
@@ -21,6 +22,14 @@ interface Props {
 }
 
 export default async function AdminHubPage({ searchParams }: Props) {
+  const cookieStore = await cookies();
+  const userRole = cookieStore.get('dtk_role')?.value;
+  const userTenant = cookieStore.get('dtk_tenant')?.value;
+
+  if (userRole === 'packing') {
+    redirect(`/packing/${userTenant || 'fuego-carbon'}`);
+  }
+
   const { merchant } = await searchParams;
   if (merchant) {
     redirect(`/admin/${merchant}`);
@@ -29,14 +38,18 @@ export default async function AdminHubPage({ searchParams }: Props) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user && !userTenant) redirect('/login');
 
-  // Cargar vinculación usuario-restaurante
-  const { data: restaurantUser } = await supabase
-    .from('restaurant_users')
-    .select('restaurant_id, role')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  // Cargar vinculación usuario-restaurante si hay sesión Supabase
+  let restaurantUser = null;
+  if (user) {
+    const { data } = await supabase
+      .from('restaurant_users')
+      .select('restaurant_id, role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    restaurantUser = data;
+  }
 
   // Cargar todos los comercios
   const { data: restaurants } = await supabase
@@ -65,7 +78,7 @@ export default async function AdminHubPage({ searchParams }: Props) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-extrabold tracking-wide uppercase">Delivery Tracker DaaS</h1>
+              <h1 className="text-base font-extrabold tracking-wide uppercase">Delivery Tracker</h1>
               <span className="text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
                 Portal de Acceso
               </span>
@@ -77,31 +90,29 @@ export default async function AdminHubPage({ searchParams }: Props) {
         <div className="flex items-center gap-3">
           <Link
             href="/superadmin"
-            className="text-xs bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all"
           >
             <ShieldCheck size={14} />
-            <span>Portal SuperAdmin</span>
+            <span>SuperAdmin Console</span>
           </Link>
-
           <Link
-            href="/onboarding"
-            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-md"
+            href="/login"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors text-xs flex items-center gap-1.5"
+            title="Cerrar Sesión"
           >
-            <Plus size={14} />
-            <span>+ Nuevo Comercio</span>
+            <LogOut size={16} />
           </Link>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-4xl mx-auto w-full px-4 py-10 sm:py-14 flex-1 space-y-8">
-
-        <div className="text-center max-w-xl mx-auto space-y-2">
+      <main className="max-w-5xl mx-auto w-full px-4 py-8 sm:py-12 flex-1">
+        <div className="mb-8">
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Comercios &amp; Clientes Activos
+            Comercios Activos
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Cada comercio cuenta con su propia consola aislada de pedidos, motorizados y estación de empaque.
+            Cada comercio cuenta con su propia consola aislada de pedidos y motorizados.
           </p>
         </div>
 
@@ -110,7 +121,6 @@ export default async function AdminHubPage({ searchParams }: Props) {
           {merchantList.map(merchant => {
             const isRestaurant = merchant.slug === 'fuego-carbon';
             const isBookstore = merchant.slug === 'libreria-atenea';
-            const port = isRestaurant ? '3001' : isBookstore ? '3002' : null;
 
             return (
               <div
@@ -120,10 +130,10 @@ export default async function AdminHubPage({ searchParams }: Props) {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg"
-                      style={{ background: merchant.brand_color || (isRestaurant ? '#DC2626' : '#0F766E') }}
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg"
+                      style={{ background: merchant.brand_color || '#4F46E5' }}
                     >
-                      {isRestaurant ? '🔥' : isBookstore ? '📚' : '🏢'}
+                      <Store size={22} />
                     </div>
                     <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
                       merchant.is_open
@@ -146,7 +156,7 @@ export default async function AdminHubPage({ searchParams }: Props) {
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-4 border-t border-slate-800">
+                <div className="pt-4 border-t border-slate-800">
                   <Link
                     href={`/admin/${merchant.slug}`}
                     className="w-full py-3 px-4 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all hover:opacity-95"
@@ -155,33 +165,6 @@ export default async function AdminHubPage({ searchParams }: Props) {
                     <span>Abrir Panel de Despacho</span>
                     <ArrowRight size={14} />
                   </Link>
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <Link
-                      href={`/packing/${merchant.slug}`}
-                      target="_blank"
-                      className="py-2 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-bold text-[11px] border border-amber-500/30 flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <Boxes size={12} />
-                      <span>Packing ↗</span>
-                    </Link>
-
-                    {port ? (
-                      <a
-                        href={`http://localhost:${port}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] border border-slate-700 flex items-center justify-center gap-1 transition-colors"
-                      >
-                        <ExternalLink size={12} />
-                        <span>Tienda (:{port}) ↗</span>
-                      </a>
-                    ) : (
-                      <div className="py-2 px-3 rounded-lg bg-slate-800/40 text-slate-500 text-[11px] font-semibold text-center">
-                        API B2B
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             );

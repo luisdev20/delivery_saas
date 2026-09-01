@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Truck, ArrowRight, Loader2 } from 'lucide-react';
 
@@ -8,6 +9,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,50 +23,98 @@ export default function LoginPage() {
       return;
     }
 
-    // Identificar el comercio o rol de forma segura
-    let targetRole = 'owner';
-    let targetTenant = 'fuego-carbon';
-    let targetRedirect = '/admin/fuego-carbon';
-
-    if (
-      cleanEmail.includes('superadmin') ||
-      cleanEmail.includes('deliveryos') ||
-      cleanEmail === 'admin@saas.com'
-    ) {
-      targetRole = 'superadmin';
-      targetTenant = 'all';
-      targetRedirect = '/superadmin';
-    } else if (
-      cleanEmail.includes('libreria') ||
-      cleanEmail.includes('atenea') ||
-      cleanEmail.includes('libro')
-    ) {
-      targetRole = 'owner';
-      targetTenant = 'libreria-atenea';
-      targetRedirect = '/admin/libreria-atenea';
-    } else {
-      // Por defecto para Fuego & Carbón / Restaurante
-      targetRole = 'owner';
-      targetTenant = 'fuego-carbon';
-      targetRedirect = '/admin/fuego-carbon';
-    }
-
-    // Configurar cookies de sesión seguras para RBAC y protección en servidor
-    document.cookie = `dtk_role=${targetRole}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `dtk_tenant=${targetTenant}; path=/; max-age=86400; SameSite=Lax`;
-
     try {
-      localStorage.setItem('dtk_user_email', cleanEmail);
-      localStorage.setItem('dtk_role', targetRole);
-      localStorage.setItem('dtk_tenant', targetTenant);
-    } catch {}
+      let targetRole = 'owner';
+      let targetTenant = 'fuego-carbon';
+      let targetRedirect = '/admin/fuego-carbon';
+      let authenticated = false;
 
-    toast.success('Iniciando sesión...');
+      // 1. Intento de autenticación oficial con Supabase Auth
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
 
-    // Redirección inmediata y limpia
-    setTimeout(() => {
-      window.location.href = targetRedirect;
-    }, 400);
+        if (!authError && authData.user) {
+          authenticated = true;
+          const { data: userProfile } = await supabase
+            .from('restaurant_users')
+            .select('role, restaurant_id, restaurants(slug)')
+            .eq('user_id', authData.user.id)
+            .maybeSingle();
+
+          if (userProfile) {
+            targetRole = userProfile.role;
+            const restaurantSlug = (userProfile.restaurants as { slug?: string } | null)?.slug || 'fuego-carbon';
+
+            if (userProfile.role === 'superadmin') {
+              targetTenant = 'all';
+              targetRedirect = '/superadmin';
+            } else if (userProfile.role === 'packing') {
+              targetTenant = restaurantSlug;
+              targetRedirect = `/packing/${restaurantSlug}`;
+            } else {
+              targetTenant = restaurantSlug;
+              targetRedirect = `/admin/${restaurantSlug}`;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Cuentas de roles preconfiguradas
+      if (!authenticated) {
+        if (cleanEmail === 'admin@saas.com') {
+          targetRole = 'superadmin';
+          targetTenant = 'all';
+          targetRedirect = '/superadmin';
+          authenticated = true;
+        } else if (cleanEmail === 'admin@fuego-carbon.com') {
+          targetRole = 'owner';
+          targetTenant = 'fuego-carbon';
+          targetRedirect = '/admin/fuego-carbon';
+          authenticated = true;
+        } else if (cleanEmail === 'empaque@fuego-carbon.com') {
+          targetRole = 'packing';
+          targetTenant = 'fuego-carbon';
+          targetRedirect = '/packing/fuego-carbon';
+          authenticated = true;
+        } else if (cleanEmail === 'admin@libreria-atenea.com') {
+          targetRole = 'owner';
+          targetTenant = 'libreria-atenea';
+          targetRedirect = '/admin/libreria-atenea';
+          authenticated = true;
+        } else if (cleanEmail === 'empaque@libreria-atenea.com') {
+          targetRole = 'packing';
+          targetTenant = 'libreria-atenea';
+          targetRedirect = '/packing/libreria-atenea';
+          authenticated = true;
+        } else {
+          toast.error('Usuario o contraseña no válidos.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Configurar cookies de sesión
+      document.cookie = `dtk_role=${targetRole}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `dtk_tenant=${targetTenant}; path=/; max-age=86400; SameSite=Lax`;
+
+      try {
+        localStorage.setItem('dtk_user_email', cleanEmail);
+        localStorage.setItem('dtk_role', targetRole);
+        localStorage.setItem('dtk_tenant', targetTenant);
+      } catch {}
+
+      toast.success('Iniciando sesión...');
+
+      setTimeout(() => {
+        window.location.href = targetRedirect;
+      }, 350);
+    } catch {
+      toast.error('Error al procesar el inicio de sesión.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -75,7 +125,7 @@ export default function LoginPage() {
         fontFamily: 'Inter, sans-serif',
       }}
     >
-      {/* Dot pattern overlay tradicional del SaaS */}
+      {/* Dot pattern overlay */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
@@ -85,7 +135,7 @@ export default function LoginPage() {
       />
 
       <div className="relative z-10 w-full max-w-md animate-fade-in space-y-6">
-        {/* Brand header acorde al panel admin */}
+        {/* Brand header */}
         <div className="text-center">
           <div
             className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-xl text-white"
@@ -101,14 +151,9 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Login Card Blanco tradicional */}
-        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-100 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900">Iniciar Sesión</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Ingrese sus credenciales de acceso</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
+        {/* Login card */}
+        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-2xl">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div className="form-group">
               <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-600" htmlFor="email">
                 Correo Electrónico
@@ -119,7 +164,7 @@ export default function LoginPage() {
                 className="form-input"
                 placeholder="usuario@comercio.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
               />
@@ -130,9 +175,6 @@ export default function LoginPage() {
                 <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-600" htmlFor="password">
                   Contraseña
                 </label>
-                <span className="text-[11px] text-indigo-600 hover:text-indigo-700 cursor-pointer font-medium">
-                  ¿Olvidó su clave?
-                </span>
               </div>
               <input
                 id="password"
@@ -140,22 +182,10 @@ export default function LoginPage() {
                 className="form-input"
                 placeholder="••••••••"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
               />
-            </div>
-
-            <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                id="remember"
-                defaultChecked
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-              />
-              <label htmlFor="remember" className="cursor-pointer select-none">
-                Recordar dispositivo en este navegador
-              </label>
             </div>
 
             <div className="pt-2">
@@ -168,11 +198,11 @@ export default function LoginPage() {
                 {isLoading ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Verificando...</span>
+                    <span>Iniciando sesión...</span>
                   </>
                 ) : (
                   <>
-                    <span>Acceder al Panel de Control</span>
+                    <span>Iniciar Sesión</span>
                     <ArrowRight size={16} />
                   </>
                 )}

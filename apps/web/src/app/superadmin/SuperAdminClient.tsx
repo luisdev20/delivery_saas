@@ -531,9 +531,9 @@ export default function SuperAdminClient({
                       <tr key={merchant.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-4 px-4 font-bold text-slate-900">
                           <div className="flex items-center gap-2.5">
-                            <span className="text-base">
-                              {merchant.slug === 'fuego-carbon' ? '🔥' : merchant.slug === 'libreria-atenea' ? '📚' : '🏢'}
-                            </span>
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                              <Store size={16} />
+                            </div>
                             <div>
                               <p className="font-extrabold text-sm text-slate-900">{merchant.name}</p>
                               <span className="text-[10px] text-slate-400 font-mono">ID: {merchant.id.substring(0, 8)}...</span>
@@ -551,7 +551,7 @@ export default function SuperAdminClient({
                             </span>
                             {merchant.lat != null && merchant.lng != null && (
                               <span className="text-[9px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                                GPS ✓
+                                GPS
                               </span>
                             )}
                           </div>
