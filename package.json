@@ -15,5 +15,8 @@
   "devDependencies": {
     "turbo": "latest"
   },
-  "packageManager": "npm@10.0.0"
+  "packageManager": "npm@10.0.0",
+  "optionalDependencies": {
+    "lightningcss-darwin-arm64": "^1.33.0"
+  }
 }

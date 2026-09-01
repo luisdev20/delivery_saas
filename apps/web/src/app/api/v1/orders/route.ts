@@ -26,18 +26,32 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 
 // POST /api/v1/orders - Crear requerimiento de despacho logístico
 export async function POST(req: Request) {
-  const auth = await authenticateApiKey(req);
-  if (!auth) {
-    return NextResponse.json(
-      { error: 'No autorizado. Proporcione una clave de API válida en la cabecera `x-api-key`.' },
-      { status: 401 }
-    );
-  }
-
+  let auth = await authenticateApiKey(req);
   const supabase = getSupabaseClient();
 
   try {
     const body = await req.json();
+
+    // Fallback: Si no hay x-api-key en headers pero se envió merchant_slug en body
+    if (!auth && body.merchant_slug) {
+      const { data: store } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('slug', body.merchant_slug)
+        .maybeSingle();
+
+      if (store) {
+        auth = { restaurantId: store.id, keyId: 'slug-auth' };
+      }
+    }
+
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'No autorizado. Proporcione una clave de API válida en la cabecera `x-api-key`.' },
+        { status: 401 }
+      );
+    }
+
     const {
       external_order_id,
       customer,
@@ -47,15 +61,25 @@ export async function POST(req: Request) {
       origin_system = 'API_REST',
     } = body;
 
+    // Normalizar datos de destinatario (admite formato anidado y formato plano)
+    const customerData = customer || {
+      name: body.customer_name,
+      phone: body.customer_phone,
+      address: body.delivery_address || body.address,
+      reference: body.delivery_reference || body.reference,
+      lat: body.customer_lat != null ? body.customer_lat : body.lat,
+      lng: body.customer_lng != null ? body.customer_lng : body.lng,
+    };
+
     // Validación básica de destinatario
-    if (!customer?.name || !customer?.phone || !customer?.address) {
+    if (!customerData?.name || !customerData?.phone || !customerData?.address) {
       return NextResponse.json(
         { error: 'Campos requeridos de cliente incompletos: `customer.name`, `customer.phone`, `customer.address`.' },
         { status: 400 }
       );
     }
 
-    if (customer.lat == null || customer.lng == null) {
+    if (customerData.lat == null || customerData.lng == null) {
       return NextResponse.json(
         { error: 'Coordenadas de entrega obligatorias para telemetría: `customer.lat` y `customer.lng`.' },
         { status: 400 }
@@ -77,7 +101,7 @@ export async function POST(req: Request) {
 
     // Validar radio máximo de delivery
     if (merchant.lat != null && merchant.lng != null) {
-      const distanceKm = calculateDistanceKm(merchant.lat, merchant.lng, customer.lat, customer.lng);
+      const distanceKm = calculateDistanceKm(merchant.lat, merchant.lng, customerData.lat, customerData.lng);
       if (distanceKm > maxRadius) {
         return NextResponse.json(
           {
@@ -136,12 +160,12 @@ export async function POST(req: Request) {
       external_order_id: external_order_id ? String(external_order_id) : null,
       origin_system: String(origin_system),
       pin_code: pinCode,
-      customer_name: customer.name,
-      customer_phone: customer.phone,
-      delivery_address: customer.address,
-      delivery_reference: customer.reference || null,
-      delivery_lat: customer.lat,
-      delivery_lng: customer.lng,
+      customer_name: customerData.name,
+      customer_phone: customerData.phone,
+      delivery_address: customerData.address,
+      delivery_reference: customerData.reference || null,
+      delivery_lat: customerData.lat,
+      delivery_lng: customerData.lng,
       status: 'RECIBIDO',
       payment_method: paymentMethod,
       cash_amount_change: paymentMethod === 'EFECTIVO' && payment?.cash_amount_change ? Number(payment.cash_amount_change) : null,

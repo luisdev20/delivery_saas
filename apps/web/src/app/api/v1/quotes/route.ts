@@ -28,13 +28,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const {
-      slug,
-      restaurant_id,
-      delivery_lat,
-      delivery_lng,
-      subtotal_amount = 0,
-    } = body;
+    const slug = body.slug || body.merchant_slug || body.restaurant_slug;
+    const restaurant_id = body.restaurant_id;
+    const delivery_lat = body.delivery_lat ?? body.customer_lat ?? body.lat;
+    const delivery_lng = body.delivery_lng ?? body.customer_lng ?? body.lng;
+    const subtotal_amount = body.subtotal_amount || body.total_amount || 0;
 
     let targetRestaurantId = restaurant_id;
 

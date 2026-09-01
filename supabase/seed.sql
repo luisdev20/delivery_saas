@@ -1,34 +1,57 @@
-INSERT INTO restaurants (id, name, slug, phone, address, brand_color, is_open)
+-- ============================================================
+-- Seed Data: Delivery Platform (Multi-Tenant B2B SaaS)
+-- ============================================================
+
+-- 1. Restaurante / Asador Criollo
+INSERT INTO restaurants (id, name, slug, phone, address, brand_color, is_open, lat, lng, max_delivery_radius_km)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
-  'El Rincón Criollo',
-  'rincon-criollo',
+  'Fuego & Carbón',
+  'fuego-carbon',
   '987654321',
   'Av. La Marina 1234, San Miguel, Lima',
-  '#E53E3E',
-  true
-);
+  '#DC2626',
+  true,
+  -12.0782,
+  -77.0854,
+  12.0
+) ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  slug = EXCLUDED.slug,
+  brand_color = EXCLUDED.brand_color;
 
 INSERT INTO subscriptions (restaurant_id, plan, max_drivers, max_orders_per_month)
-VALUES ('00000000-0000-0000-0000-000000000001', 'STARTER', 2, 300);
+VALUES ('00000000-0000-0000-0000-000000000001', 'GROWTH', 5, 2000)
+ON CONFLICT (restaurant_id) DO NOTHING;
 
-INSERT INTO drivers (restaurant_id, name, phone, is_active) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Carlos Rios',    '941000001', true),
-  ('00000000-0000-0000-0000-000000000001', 'Miguel Torres',  '941000002', true);
+INSERT INTO drivers (id, restaurant_id, name, phone, is_active) VALUES
+  ('0266640d-9d64-4852-9e07-0a3b7e6d5bf6', '00000000-0000-0000-0000-000000000001', 'Carlos Rios', '941000001', true),
+  ('f515885e-2c37-4812-b744-2a6bc5aade8b', '00000000-0000-0000-0000-000000000001', 'Miguel Torres', '941000002', true)
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO products (restaurant_id, name, description, category, price, is_available, available_days, sort_order) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Menú del Día Completo', 'Entrada, segundo y refresco.', 'Menú del Día', 15.00, true, '{1,2,3,4,5}', 1),
-  ('00000000-0000-0000-0000-000000000001', 'Caldo de Gallina', 'Caldo con fideos, papa y huevo.', 'Menú del Día', 10.00, true, '{1,2,3,4,5}', 2),
-  ('00000000-0000-0000-0000-000000000001', 'Lomo Saltado', 'Lomo saltado con papas fritas y arroz.', 'A la Carta', 22.00, true, '{1,2,3,4,5,6,7}', 10),
-  ('00000000-0000-0000-0000-000000000001', 'Pollo a la Brasa (1/4)', 'Cuarto de pollo con papas y ensalada.', 'A la Carta', 18.00, true, '{1,2,3,4,5,6,7}', 11),
-  ('00000000-0000-0000-0000-000000000001', 'Tallarín Saltado con Pollo', 'Tallarín verde salteado con pollo.', 'A la Carta', 20.00, true, '{1,2,3,4,5,6,7}', 12),
-  ('00000000-0000-0000-0000-000000000001', 'Seco de Res con Frijoles', 'Guiso de res con frijoles y arroz.', 'A la Carta', 22.00, true, '{1,2,3,4,5,6,7}', 13),
-  ('00000000-0000-0000-0000-000000000001', 'Causa Limeña', 'Papa amarilla rellena de pollo.', 'A la Carta', 12.00, true, '{1,2,3,4,5,6,7}', 14),
-  ('00000000-0000-0000-0000-000000000001', 'Arroz con Pato Norteño', 'Arroz verde con pato guisado. Fines de semana.', 'A la Carta', 28.00, true, '{6,7}', 20),
-  ('00000000-0000-0000-0000-000000000001', 'Carapulcra con Sopa Seca', 'Papa seca con fideos. Fines de semana.', 'A la Carta', 25.00, true, '{6,7}', 21),
-  ('00000000-0000-0000-0000-000000000001', 'Chicha Morada (1L)', 'Bebida natural de maíz morado.', 'Bebidas', 6.00, true, '{1,2,3,4,5,6,7}', 30),
-  ('00000000-0000-0000-0000-000000000001', 'Limonada Frozen', 'Limonada helada.', 'Bebidas', 7.00, true, '{1,2,3,4,5,6,7}', 31),
-  ('00000000-0000-0000-0000-000000000001', 'Inca Kola 500ml', 'Bebida gaseosa.', 'Bebidas', 4.00, true, '{1,2,3,4,5,6,7}', 32),
-  ('00000000-0000-0000-0000-000000000001', 'Agua San Luis 625ml', 'Agua mineral sin gas.', 'Bebidas', 3.00, true, '{1,2,3,4,5,6,7}', 33),
-  ('00000000-0000-0000-0000-000000000001', 'Arroz con Leche', 'Arroz con leche y canela.', 'Postres', 6.00, true, '{1,2,3,4,5,6,7}', 40),
-  ('00000000-0000-0000-0000-000000000001', 'Mazamorra Morada', 'Mazamorra de maíz morado.', 'Postres', 6.00, true, '{1,2,3,4,5,6,7}', 41);
+-- 2. Comercio B2B: Librería & Papelería
+INSERT INTO restaurants (id, name, slug, phone, address, brand_color, is_open, lat, lng, max_delivery_radius_km)
+VALUES (
+  '00000000-0000-0000-0000-000000000002',
+  'Librería Atenea',
+  'libreria-atenea',
+  '981112233',
+  'Av. Larco 456, Miraflores, Lima',
+  '#0F766E',
+  true,
+  -12.1215,
+  -77.0298,
+  15.0
+) ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  slug = EXCLUDED.slug,
+  brand_color = EXCLUDED.brand_color;
+
+INSERT INTO subscriptions (restaurant_id, plan, max_drivers, max_orders_per_month)
+VALUES ('00000000-0000-0000-0000-000000000002', 'STARTER', 2, 500)
+ON CONFLICT (restaurant_id) DO NOTHING;
+
+INSERT INTO drivers (id, restaurant_id, name, phone, is_active) VALUES
+  ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000002', 'Jorge Mendoza', '942000001', true),
+  ('11111111-1111-1111-1111-111111111102', '00000000-0000-0000-0000-000000000002', 'Diego Salazar', '942000002', true)
+ON CONFLICT (id) DO NOTHING;

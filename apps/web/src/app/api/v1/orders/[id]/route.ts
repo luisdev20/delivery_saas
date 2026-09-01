@@ -18,19 +18,19 @@ interface Params {
 // GET /api/v1/orders/[id] - Consultar estado y telemetría de una orden
 export async function GET(req: Request, { params }: Params) {
   const auth = await authenticateApiKey(req);
-  if (!auth) {
-    return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-  }
-
   const { id } = await params;
   const supabase = getSupabaseClient();
 
-  const { data: order, error } = await supabase
+  let query = supabase
     .from('orders')
     .select('*, driver:drivers(id, name, phone), order_items(*)')
-    .eq('id', id)
-    .eq('restaurant_id', auth.restaurantId)
-    .single();
+    .eq('id', id);
+
+  if (auth) {
+    query = query.eq('restaurant_id', auth.restaurantId);
+  }
+
+  const { data: order, error } = await query.maybeSingle();
 
   if (error || !order) {
     return NextResponse.json({ error: 'Orden no encontrada.' }, { status: 404 });
