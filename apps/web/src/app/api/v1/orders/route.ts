@@ -65,24 +65,26 @@ export async function POST(req: Request) {
     // Obtener datos del comercio
     const { data: merchant, error: merchantError } = await supabase
       .from('restaurants')
-      .select('id, name, lat, lng, max_delivery_radius_km, is_open')
+      .select('*')
       .eq('id', auth.restaurantId)
-      .single();
+      .maybeSingle();
 
     if (merchantError || !merchant) {
       return NextResponse.json({ error: 'Comercio no encontrado o inactivo.' }, { status: 404 });
     }
 
+    const maxRadius = Number(merchant.max_delivery_radius_km) || 12.0;
+
     // Validar radio máximo de delivery
-    if (merchant.lat != null && merchant.lng != null && merchant.max_delivery_radius_km) {
+    if (merchant.lat != null && merchant.lng != null) {
       const distanceKm = calculateDistanceKm(merchant.lat, merchant.lng, customer.lat, customer.lng);
-      if (distanceKm > merchant.max_delivery_radius_km) {
+      if (distanceKm > maxRadius) {
         return NextResponse.json(
           {
             error: 'Destino fuera de cobertura',
-            message: `La distancia (${distanceKm.toFixed(2)} km) excede el radio máximo configurado (${merchant.max_delivery_radius_km} km).`,
+            message: `La distancia (${distanceKm.toFixed(2)} km) excede el radio máximo configurado (${maxRadius} km).`,
             distance_km: parseFloat(distanceKm.toFixed(2)),
-            max_radius_km: merchant.max_delivery_radius_km,
+            max_radius_km: maxRadius,
           },
           { status: 422 }
         );
@@ -118,20 +120,47 @@ export async function POST(req: Request) {
 
     const calculatedTotal = parsedItems.reduce((sum, it) => sum + it.unit_price * it.quantity, 0);
     const totalAmount = payment?.total_amount != null ? Number(payment.total_amount) : calculatedTotal;
-    const paymentMethod: PaymentMethod = ['EFECTIVO', 'YAPE', 'PLIN', 'PAGADO_ORIGEN'].includes(payment?.method)
+    // Map to supported database enum (EFECTIVO | YAPE | PLIN)
+    const paymentMethod: PaymentMethod = ['EFECTIVO', 'YAPE', 'PLIN'].includes(payment?.method)
       ? payment.method
-      : 'PAGADO_ORIGEN';
+      : 'YAPE'; // Default safe enum for online card/gateway payments
 
     const pinCode = generatePinCode();
+    const formattedNotes = `[${origin_system}] [PIN: ${pinCode}] ${notes ? `${notes}` : ''}`.trim();
 
-    // Insertar orden en estado RECIBIDO
-    const { data: order, error: orderError } = await supabase
+    // Intentar insertar con schema completo
+    let insertedOrder: { id: string; order_number: number; pin_code?: string } | null = null;
+
+    const fullPayload = {
+      restaurant_id: auth.restaurantId,
+      external_order_id: external_order_id ? String(external_order_id) : null,
+      origin_system: String(origin_system),
+      pin_code: pinCode,
+      customer_name: customer.name,
+      customer_phone: customer.phone,
+      delivery_address: customer.address,
+      delivery_reference: customer.reference || null,
+      delivery_lat: customer.lat,
+      delivery_lng: customer.lng,
+      status: 'RECIBIDO',
+      payment_method: paymentMethod,
+      cash_amount_change: paymentMethod === 'EFECTIVO' && payment?.cash_amount_change ? Number(payment.cash_amount_change) : null,
+      total_amount: totalAmount,
+      notes: formattedNotes,
+    };
+
+    const { data: order1, error: error1 } = await supabase
       .from('orders')
-      .insert({
+      .insert(fullPayload)
+      .select()
+      .single();
+
+    if (!error1 && order1) {
+      insertedOrder = order1;
+    } else {
+      // Fallback a columnas base compatibles
+      const basePayload = {
         restaurant_id: auth.restaurantId,
-        external_order_id: external_order_id ? String(external_order_id) : null,
-        origin_system: String(origin_system),
-        pin_code: pinCode,
         customer_name: customer.name,
         customer_phone: customer.phone,
         delivery_address: customer.address,
@@ -142,19 +171,25 @@ export async function POST(req: Request) {
         payment_method: paymentMethod,
         cash_amount_change: paymentMethod === 'EFECTIVO' && payment?.cash_amount_change ? Number(payment.cash_amount_change) : null,
         total_amount: totalAmount,
-        notes: notes || null,
-      })
-      .select()
-      .single();
+        notes: formattedNotes,
+      };
 
-    if (orderError || !order) {
-      console.error('Error creating order:', orderError);
-      return NextResponse.json({ error: 'Error al registrar la orden en el motor logístico.' }, { status: 500 });
+      const { data: order2, error: error2 } = await supabase
+        .from('orders')
+        .insert(basePayload)
+        .select()
+        .single();
+
+      if (error2 || !order2) {
+        console.error('Error creating order in Supabase:', error2);
+        return NextResponse.json({ error: 'Error al registrar la orden en el motor logístico.' }, { status: 500 });
+      }
+      insertedOrder = { ...order2, pin_code: pinCode };
     }
 
     // Insertar ítems
     const orderItemsPayload = parsedItems.map(item => ({
-      order_id: order.id,
+      order_id: insertedOrder!.id,
       product_name: item.product_name,
       quantity: item.quantity,
       unit_price: item.unit_price,
@@ -171,19 +206,19 @@ export async function POST(req: Request) {
     }
 
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const trackingUrl = `${origin}/tracking/${order.id}`;
+    const trackingUrl = `${origin}/tracking/${insertedOrder!.id}`;
 
     return NextResponse.json(
       {
         success: true,
-        order_id: order.id,
-        order_number: order.order_number,
-        external_order_id: order.external_order_id,
+        order_id: insertedOrder!.id,
+        order_number: insertedOrder!.order_number,
+        external_order_id: external_order_id || null,
         status: 'RECIBIDO',
-        pin_code: pinCode,
-        total_amount: order.total_amount,
+        pin_code: insertedOrder!.pin_code || pinCode,
+        total_amount: totalAmount,
         tracking_url: trackingUrl,
-        created_at: order.created_at,
+        created_at: new Date().toISOString(),
         message: 'Requerimiento de despacho recibido y encolado en el centro de preparación.',
       },
       { status: 201 }

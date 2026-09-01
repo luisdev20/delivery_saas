@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import type { Restaurant, Order } from '@/lib/supabase/types';
-import KdsClient from './KdsClient';
+import PackingClient from './PackingClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -14,55 +15,42 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const supabase = await createClient();
-  let { data: restaurant } = await supabase
+  const { data: restaurant } = await supabase
     .from('restaurants')
     .select('name')
     .eq('slug', slug)
     .maybeSingle();
 
-  if (!restaurant) {
-    const normalized = slug.replace(/^el-/, '');
-    const { data: fallback } = await supabase
-      .from('restaurants')
-      .select('name')
-      .ilike('slug', `%${normalized}%`)
-      .limit(1)
-      .maybeSingle();
-    restaurant = fallback;
-  }
-
-  if (!restaurant) return { title: 'Monitor KDS' };
+  if (!restaurant) return { title: 'Estación de Empaque (Packing)' };
 
   return {
-    title: `KDS Cocina - ${restaurant.name}`,
-    description: `Pantalla de cocina en tiempo real para ${restaurant.name}`,
+    title: `Estación de Empaque & Fulfillment - ${restaurant.name}`,
+    description: `Monitor de preparación, armado y despacho en tiempo real para ${restaurant.name}`,
   };
 }
 
-export default async function KdsPage({ params }: Props) {
+export default async function PackingPage({ params }: Props) {
   const { slug } = await params;
+  const cookieStore = await cookies();
+  const userRole = cookieStore.get('dtk_role')?.value || 'owner';
+  const userTenant = cookieStore.get('dtk_tenant')?.value;
+
+  // Tenant Security Guard:
+  if (userRole !== 'superadmin' && userTenant && userTenant !== slug && userTenant !== 'all') {
+    redirect(`/packing/${userTenant}`);
+  }
+
   const supabase = await createClient();
 
-  let { data: restaurant } = await supabase
+  const { data: restaurant } = await supabase
     .from('restaurants')
     .select('*')
     .eq('slug', slug)
     .maybeSingle();
 
-  if (!restaurant) {
-    const normalized = slug.replace(/^el-/, '');
-    const { data: fallback } = await supabase
-      .from('restaurants')
-      .select('*')
-      .ilike('slug', `%${normalized}%`)
-      .limit(1)
-      .maybeSingle();
-    restaurant = fallback;
-  }
-
   if (!restaurant) notFound();
 
-  // Load active orders for KDS (RECIBIDO, EN_PREPARACION, LISTO)
+  // Cargar órdenes activas de empaque y preparación de este comercio
   const { data: initialOrders } = await supabase
     .from('orders')
     .select('*, order_items(*)')
@@ -71,7 +59,7 @@ export default async function KdsPage({ params }: Props) {
     .order('created_at', { ascending: true });
 
   return (
-    <KdsClient
+    <PackingClient
       restaurant={restaurant as Restaurant}
       initialOrders={(initialOrders || []) as Order[]}
     />

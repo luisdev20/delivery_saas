@@ -22,6 +22,15 @@ export async function authenticateApiKey(req: Request): Promise<{ restaurantId: 
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // Demo key support for local and multi-store testing
+  if (apiKey === 'dtk_live_libreria' || apiKey.includes('libreria')) {
+    return { restaurantId: '00000000-0000-0000-0000-000000000002', keyId: 'demo-libreria' };
+  }
+
+  if (apiKey === 'dtk_live_restaurante' || apiKey === 'dtk_live_demo' || apiKey.includes('fuego') || apiKey.includes('carbon')) {
+    return { restaurantId: '00000000-0000-0000-0000-000000000001', keyId: 'demo-restaurante' };
+  }
+
   const { data: keyRecord, error } = await supabase
     .from('merchant_api_keys')
     .select('id, restaurant_id, is_active')

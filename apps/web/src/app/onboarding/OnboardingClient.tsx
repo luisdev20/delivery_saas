@@ -299,17 +299,17 @@ export default function OnboardingClient() {
 
           <div className="bg-slate-50 rounded-xl p-4 text-left space-y-3 mb-6">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500">Tienda pública</span>
-              <a href={`/p/${createdSlug}`} target="_blank" rel="noopener noreferrer"
+              <span className="text-slate-500">Estación Packing</span>
+              <a href={`/packing/${createdSlug}`} target="_blank" rel="noopener noreferrer"
                 className="text-indigo-600 font-semibold flex items-center gap-1 hover:underline">
-                /p/{createdSlug} <ExternalLink size={12} />
+                /packing/{createdSlug} <ExternalLink size={12} />
               </a>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500">Cocina KDS</span>
-              <a href={`/kds/${createdSlug}`} target="_blank" rel="noopener noreferrer"
+              <span className="text-slate-500">Consola Despacho</span>
+              <a href="/admin"
                 className="text-indigo-600 font-semibold flex items-center gap-1 hover:underline">
-                /kds/{createdSlug} <ExternalLink size={12} />
+                /admin <ExternalLink size={12} />
               </a>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -398,9 +398,9 @@ export default function OnboardingClient() {
                     onChange={e => updateForm({ name: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-500">Slug (URL)</label>
+                  <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-500">Slug Identificador</label>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-400">/p/</span>
+                    <span className="text-xs text-slate-400">/packing/</span>
                     <input className="form-input" value={form.slug}
                       onChange={e => updateForm({ slug: slugify(e.target.value) })} />
                   </div>
@@ -602,7 +602,7 @@ export default function OnboardingClient() {
               <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
                 <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider mb-2">Resumen</h3>
                 <div className="flex justify-between"><span className="text-slate-500">Restaurante</span><span className="font-semibold text-slate-800">{form.name || '—'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">URL</span><span className="font-mono text-xs text-indigo-600">/p/{form.slug || '—'}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Estación Packing</span><span className="font-mono text-xs text-indigo-600">/packing/{form.slug || '—'}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Admin</span><span className="font-semibold text-slate-800">{form.admin_email || '—'}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Plan</span><span className="font-bold text-indigo-600">{PLAN_LIMITS[form.plan]?.label} — S/{PLAN_LIMITS[form.plan]?.price}/mes</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Radio delivery</span><span className="font-semibold text-slate-800">{form.max_delivery_radius_km} km</span></div>

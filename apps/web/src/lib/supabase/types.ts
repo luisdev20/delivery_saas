@@ -1,8 +1,7 @@
 export type OrderStatus =
   | 'RECIBIDO'
   | 'EN_PREPARACION'
-  | 'LISTO_PARA_ENTREGA'
-  | 'ASIGNADO'
+  | 'LISTO'
   | 'EN_CAMINO'
   | 'ENTREGADO'
   | 'CANCELADO';

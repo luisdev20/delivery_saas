@@ -8,7 +8,9 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "type-check": "turbo type-check"
+    "type-check": "turbo type-check",
+    "demo:restaurante": "node apps/store_restaurante/server.js",
+    "demo:libreria": "node apps/store_libreria/server.js"
   },
   "devDependencies": {
     "turbo": "latest"

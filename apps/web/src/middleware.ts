@@ -28,11 +28,33 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Handle CORS for B2B API endpoints (/api/v1/*)
+  if (request.nextUrl.pathname.startsWith('/api/v1')) {
+    if (request.method === 'OPTIONS') {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
+    supabaseResponse.headers.set('Access-Control-Allow-Origin', '*');
+    supabaseResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    supabaseResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith('/admin')) {
+  const dtkTenant = request.cookies.get('dtk_tenant')?.value;
+  const dtkRole = request.cookies.get('dtk_role')?.value;
+
+  if (!user && !dtkTenant && !dtkRole && (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/superadmin'))) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

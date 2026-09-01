@@ -52,12 +52,11 @@ function playNearbyChime() {
 }
 
 const STATUS_STEPS = [
-  { key: 'RECIBIDO',           label: 'Recibido',     icon: <Package size={14} /> },
-  { key: 'EN_PREPARACION',     label: 'Preparando',   icon: <Clock size={14} /> },
-  { key: 'LISTO_PARA_ENTREGA', label: 'Listo',        icon: <CheckCircle size={14} /> },
-  { key: 'ASIGNADO',           label: 'Asignado',     icon: <CheckCircle size={14} /> },
-  { key: 'EN_CAMINO',          label: 'En camino',    icon: <Truck size={14} /> },
-  { key: 'ENTREGADO',          label: 'Entregado',    icon: <CheckCircle size={14} /> },
+  { key: 'RECIBIDO',       label: 'Recibido',     icon: <Package size={14} /> },
+  { key: 'EN_PREPARACION', label: 'Preparando',   icon: <Clock size={14} /> },
+  { key: 'LISTO',          label: 'Listo',        icon: <CheckCircle size={14} /> },
+  { key: 'EN_CAMINO',      label: 'En camino',    icon: <Truck size={14} /> },
+  { key: 'ENTREGADO',      label: 'Entregado',    icon: <CheckCircle size={14} /> },
 ];
 
 export default function TrackingClient({ order, restaurant, initialDriverLocation }: Props) {
@@ -352,12 +351,13 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
               </p>
               <div>
                 <a
-                  href={`/p/${restaurant.slug}`}
-                  className="btn btn-primary btn-full text-white font-bold py-3 text-sm shadow-md hover:opacity-95 transition-opacity"
+                  href={`tel:${restaurant.phone}`}
+                  className="btn btn-primary btn-full text-white font-bold py-3 text-sm shadow-md hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
                   style={{ background: restaurant.brand_color }}
-                  id="btn-back-menu"
+                  id="btn-contact-merchant"
                 >
-                  Volver al Menú
+                  <Phone size={16} />
+                  <span>Contactar a {restaurant.name}</span>
                 </a>
               </div>
             </div>
@@ -450,23 +450,13 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
           </div>
 
           {/* Action button */}
-          {currentOrder.status === 'ENTREGADO' ? (
-            <a
-              href={`/p/${restaurant.slug}`}
-              className="btn btn-secondary btn-full font-bold"
-              id="btn-new-order"
-            >
-              Pedir nuevamente en {restaurant.name}
-            </a>
-          ) : (
-            <a
-              href={`tel:${restaurant.phone}`}
-              className="btn btn-secondary btn-full"
-              id="btn-call-restaurant"
-            >
-              <Phone size={16} /> Llamar a {restaurant.name}
-            </a>
-          )}
+          <a
+            href={`tel:${restaurant.phone}`}
+            className="btn btn-secondary btn-full flex items-center justify-center gap-2 font-bold"
+            id="btn-call-restaurant"
+          >
+            <Phone size={16} /> Contactar a {restaurant.name}
+          </a>
         </div>
       </div>
     </div>

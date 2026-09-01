@@ -10,7 +10,7 @@ import {
   ShoppingBag, Timer, ArrowRight, Plus, Trash2, Loader2,
   TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
   ShieldCheck, AlertTriangle, Boxes, PackageCheck, UserCheck,
-  Send, ExternalLink, PlusCircle, HelpCircle,
+  Send, ExternalLink, PlusCircle, HelpCircle, Sparkles,
 } from 'lucide-react';
 import type {
   Order, Driver, Restaurant, OrderStatus, Subscription,
@@ -20,29 +20,28 @@ import { PLAN_LIMITS, CANCELLATION_REASONS } from '@/lib/supabase/types';
 
 interface Props {
   restaurant: Restaurant;
+  allRestaurants?: Restaurant[];
   drivers: Driver[];
   subscription: Subscription | null;
   userRole: string;
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ReactNode; next: OrderStatus | null }> = {
-  RECIBIDO:           { label: 'Recibido',           icon: <Bell size={14} />,         next: 'EN_PREPARACION' },
-  EN_PREPARACION:     { label: 'En preparación',     icon: <Boxes size={14} />,        next: 'LISTO_PARA_ENTREGA' },
-  LISTO_PARA_ENTREGA: { label: 'Listo p/ entrega',   icon: <PackageCheck size={14} />, next: 'ASIGNADO' },
-  ASIGNADO:           { label: 'Asignado',           icon: <UserCheck size={14} />,    next: 'EN_CAMINO' },
-  EN_CAMINO:          { label: 'En camino',          icon: <Truck size={14} />,        next: 'ENTREGADO' },
-  ENTREGADO:          { label: 'Entregado',          icon: <CheckCircle size={14} />,  next: null },
-  CANCELADO:          { label: 'Cancelado',          icon: <XCircle size={14} />,      next: null },
+  RECIBIDO:       { label: 'Recibido',        icon: <Bell size={14} />,         next: 'EN_PREPARACION' },
+  EN_PREPARACION: { label: 'En preparación',  icon: <Boxes size={14} />,        next: 'LISTO' },
+  LISTO:          { label: 'Listo p/ entrega',icon: <PackageCheck size={14} />, next: 'EN_CAMINO' },
+  EN_CAMINO:      { label: 'En camino',       icon: <Truck size={14} />,        next: 'ENTREGADO' },
+  ENTREGADO:      { label: 'Entregado',       icon: <CheckCircle size={14} />,  next: null },
+  CANCELADO:      { label: 'Cancelado',       icon: <XCircle size={14} />,      next: null },
 };
 
 const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
-  RECIBIDO:           'Iniciar armado',
-  EN_PREPARACION:     'Marcar listo p/ entrega',
-  LISTO_PARA_ENTREGA: 'Asignar motorizado',
-  ASIGNADO:           'Despachar (En camino)',
-  EN_CAMINO:          'Validar PIN y entregar',
-  ENTREGADO:          '',
-  CANCELADO:          '',
+  RECIBIDO:       'Iniciar preparación',
+  EN_PREPARACION: 'Marcar listo p/ despacho',
+  LISTO:          'Despachar (En camino)',
+  EN_CAMINO:      'Validar PIN y entregar',
+  ENTREGADO:      '',
+  CANCELADO:      '',
 };
 
 type AdminTab = 'dashboard' | 'fleet' | 'api_keys' | 'metrics';
@@ -64,7 +63,7 @@ function timeAgo(dateStr: string): string {
   return `Hace ${Math.floor(diff / 60)}h`;
 }
 
-export default function AdminDashboardClient({ restaurant, drivers: initialDrivers, subscription, userRole }: Props) {
+export default function AdminDashboardClient({ restaurant, allRestaurants = [], drivers: initialDrivers, subscription, userRole }: Props) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
   const [apiKeys, setApiKeys] = useState<MerchantApiKey[]>([]);
@@ -265,15 +264,13 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
     if (order.status === 'RECIBIDO') {
       await updateOrderStatus(order.id, 'EN_PREPARACION');
     } else if (order.status === 'EN_PREPARACION') {
-      await updateOrderStatus(order.id, 'LISTO_PARA_ENTREGA');
-    } else if (order.status === 'LISTO_PARA_ENTREGA') {
+      await updateOrderStatus(order.id, 'LISTO');
+    } else if (order.status === 'LISTO') {
       if (!order.driver_id && drivers.length > 0) {
-        toast.error('Asigne un repartidor de la lista para pasar a estado ASIGNADO');
+        toast.info('Seleccione un repartidor para despachar el pedido');
         setSelectedOrder(order);
         return;
       }
-      await updateOrderStatus(order.id, 'ASIGNADO');
-    } else if (order.status === 'ASIGNADO') {
       await updateOrderStatus(order.id, 'EN_CAMINO', { in_route_at: new Date().toISOString() });
     } else if (order.status === 'EN_CAMINO') {
       setPinModalOrder(order);
@@ -318,21 +315,41 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
   const handleConfirmCancellation = async () => {
     if (!cancelModalOrder) return;
     setCancelling(true);
-    const reasonText = `${CANCELLATION_REASONS[cancelReason]}${cancelNote ? `: ${cancelNote.trim()}` : ''}`;
-    const { error } = await supabase
+
+    const reasonText = cancelNote.trim()
+      ? `${CANCELLATION_REASONS[cancelReason]}: ${cancelNote.trim()}`
+      : CANCELLATION_REASONS[cancelReason];
+
+    const updatedNotes = cancelModalOrder.notes
+      ? `${cancelModalOrder.notes} [CANCELADO: ${reasonText}]`
+      : `[CANCELADO: ${reasonText}]`;
+
+    let { error } = await supabase
       .from('orders')
       .update({
         status: 'CANCELADO',
         cancellation_reason: reasonText,
+        notes: updatedNotes,
       })
       .eq('id', cancelModalOrder.id);
 
+    if (error) {
+      const res = await supabase
+        .from('orders')
+        .update({
+          status: 'CANCELADO',
+          notes: updatedNotes,
+        })
+        .eq('id', cancelModalOrder.id);
+      error = res.error;
+    }
+
     if (!error) {
-      setOrders(prev => prev.map(o => o.id === cancelModalOrder.id ? { ...o, status: 'CANCELADO', cancellation_reason: reasonText } : o));
+      setOrders(prev => prev.map(o => o.id === cancelModalOrder.id ? { ...o, status: 'CANCELADO', cancellation_reason: reasonText, notes: updatedNotes } : o));
       if (selectedOrder?.id === cancelModalOrder.id) {
-        setSelectedOrder(prev => prev ? { ...prev, status: 'CANCELADO', cancellation_reason: reasonText } : null);
+        setSelectedOrder(prev => prev ? { ...prev, status: 'CANCELADO', cancellation_reason: reasonText, notes: updatedNotes } : null);
       }
-      toast.error(`Despacho #${cancelModalOrder.order_number} cancelado: ${CANCELLATION_REASONS[cancelReason]}`);
+      toast.success(`Despacho #${cancelModalOrder.order_number} cancelado`);
       setCancelModalOrder(null);
       setCancelNote('');
     } else {
@@ -343,8 +360,8 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
 
   const assignDriver = async (orderId: string, driverId: string) => {
     const targetOrder = orders.find(o => o.id === orderId);
-    const shouldAdvanceToAssigned = targetOrder?.status === 'LISTO_PARA_ENTREGA' || targetOrder?.status === 'RECIBIDO' || targetOrder?.status === 'EN_PREPARACION';
-    const nextStatus: OrderStatus = shouldAdvanceToAssigned ? 'ASIGNADO' : (targetOrder?.status || 'ASIGNADO');
+    const shouldAdvance = targetOrder?.status === 'RECIBIDO' || targetOrder?.status === 'EN_PREPARACION';
+    const nextStatus: OrderStatus = shouldAdvance ? 'LISTO' : (targetOrder?.status || 'LISTO');
 
     const { error } = await supabase
       .from('orders')
@@ -360,7 +377,7 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => prev ? { ...prev, driver_id: driverId, status: nextStatus } : null);
       }
-      toast.success('Repartidor asignado -> Estado: ASIGNADO');
+      toast.success('Repartidor asignado correctamente');
     }
   };
 
@@ -659,24 +676,55 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
         fixed inset-y-0 left-0 z-30 w-64 bg-indigo-950 text-white flex flex-col shadow-xl transition-transform duration-300
         md:relative md:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `} style={{ background: 'var(--saas-900)' }}>
+      `}>
 
-        {/* Brand Header */}
-        <div className="p-6 border-b border-indigo-800/60 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--saas-600)' }}>
-            <Truck size={18} color="white" />
+        {/* Brand Header with Tenant Switcher */}
+        <div className="p-4 sm:p-5 border-b border-indigo-800/60 space-y-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--saas-600)' }}>
+              <Truck size={18} color="white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-extrabold text-sm text-white tracking-wide truncate">Delivery Tracker</h1>
+              <p className="text-[11px] text-indigo-300 font-medium truncate">Consola de Despacho</p>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <h1 className="font-bold text-sm text-white tracking-wide truncate">Delivery Tracker</h1>
-            <p className="text-xs text-indigo-300 truncate">{restaurant.name}</p>
-            {subscription && (
-              <span className={`mt-0.5 inline-block text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded ${
-                subscription.plan === 'ENTERPRISE' ? 'bg-amber-500/20 text-amber-300' :
-                subscription.plan === 'GROWTH' ? 'bg-emerald-500/20 text-emerald-300' :
-                'bg-indigo-500/20 text-indigo-300'
-              }`}>{subscription.plan}</span>
-            )}
-          </div>
+
+          {/* Multi-Tenant Switcher */}
+          {allRestaurants && allRestaurants.length > 1 && (
+            <div className="pt-1">
+              <label className="text-[9px] uppercase font-bold text-indigo-400 block mb-1">
+                Comercio Activo:
+              </label>
+              <select
+                value={restaurant.slug}
+                onChange={(e) => {
+                  if (e.target.value === '__hub__') {
+                    window.location.href = '/admin';
+                  } else if (e.target.value === '__superadmin__') {
+                    window.location.href = '/superadmin';
+                  } else {
+                    window.location.href = `/admin/${e.target.value}`;
+                  }
+                }}
+                className="w-full bg-indigo-950 border border-indigo-700/80 text-white rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                {allRestaurants.map(r => (
+                  <option key={r.id} value={r.slug} className="bg-indigo-950 text-white font-bold">
+                    {r.slug === 'fuego-carbon' ? '🔥 ' : r.slug === 'libreria-atenea' ? '📚 ' : '🏢 '}
+                    {r.name}
+                  </option>
+                ))}
+                <option disabled className="bg-indigo-900 text-indigo-400">──────────</option>
+                <option value="__hub__" className="bg-indigo-950 text-indigo-200">
+                  📁 Ver Todos los Comercios
+                </option>
+                <option value="__superadmin__" className="bg-indigo-950 text-purple-300 font-bold">
+                  🛡️ Portal SuperAdmin
+                </option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -705,23 +753,63 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
             );
           })}
 
-          {/* Dedicated KDS Kitchen / Packing Monitor Link */}
+          {/* Dedicated Packing & Fulfillment Station Link */}
           <div className="pt-2">
             <a
-              href={`/kds/${restaurant.slug}`}
+              href={`/packing/${restaurant.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 rounded-lg text-xs font-bold transition-all border border-amber-500/30 group"
-              id="btn-open-kds-screen"
+              id="btn-open-packing-screen"
             >
               <div className="flex items-center gap-2">
                 <Boxes size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
-                <span>Tablero de Empaque KDS</span>
+                <span>Estación de Empaque</span>
               </div>
               <span className="text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded text-amber-200">
-                Abrir ↗
+                Packing ↗
               </span>
             </a>
+          </div>
+
+          {/* External Store Demo Link */}
+          <div className="pt-2 border-t border-indigo-900/60 mt-1 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-indigo-400 px-3 tracking-wider">
+              E-Commerce Integrado
+            </span>
+            {restaurant.slug === 'fuego-carbon' ? (
+              <a
+                href="http://localhost:3001"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-300 rounded-lg text-xs font-bold transition-all border border-red-500/30 group"
+                id="btn-open-restaurant-demo"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🔥</span>
+                  <span>Tienda Web (:3001)</span>
+                </div>
+                <span className="text-[9px] bg-red-500/30 px-1.5 py-0.5 rounded text-red-200">
+                  Web ↗
+                </span>
+              </a>
+            ) : restaurant.slug === 'libreria-atenea' ? (
+              <a
+                href="http://localhost:3002"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 rounded-lg text-xs font-bold transition-all border border-teal-500/30 group"
+                id="btn-open-bookstore-demo"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📚</span>
+                  <span>Tienda Web (:3002)</span>
+                </div>
+                <span className="text-[9px] bg-teal-500/30 px-1.5 py-0.5 rounded text-teal-200">
+                  Web ↗
+                </span>
+              </a>
+            ) : null}
           </div>
 
           {/* Superadmin: Onboarding link */}
@@ -919,18 +1007,42 @@ export default function AdminDashboardClient({ restaurant, drivers: initialDrive
                             <td className="py-3.5 px-4 font-medium text-slate-900">
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900">#{order.order_number}</span>
-                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                                  order.origin_system === 'MANUAL_DISPATCH' ? 'bg-slate-100 text-slate-600' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                }`}>
-                                  {order.origin_system || 'API'}
-                                </span>
+                                {(() => {
+                                  const origin = order.origin_system || (order.notes?.match(/\[(.*?)\]/)?.[1]) || 'API';
+                                  if (origin.includes('RESTAURANTE') || origin.includes('Fuego')) {
+                                    return (
+                                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                        🔥 Restaurante (:3001)
+                                      </span>
+                                    );
+                                  }
+                                  if (origin.includes('LIBRERIA') || origin.includes('Atenea')) {
+                                    return (
+                                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                        📚 Librería (:3002)
+                                      </span>
+                                    );
+                                  }
+                                  if (origin === 'MANUAL_DISPATCH') {
+                                    return (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                        Manual
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      {origin}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <span className="text-xs text-slate-400 font-normal block mt-0.5">{timeAgo(order.created_at)}</span>
                             </td>
                             <td className="py-3.5 px-4">
                               <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-mono font-bold text-xs">
                                 <ShieldCheck size={12} className="text-amber-600" />
-                                {order.pin_code || '----'}
+                                {order.pin_code || (order.notes?.match(/\[PIN:\s*(\d{4})\]/)?.[1]) || '----'}
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
@@ -1918,8 +2030,8 @@ print(response.json())`}</pre>
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Bitácora Operativa</h4>
               <div className="relative pl-6 space-y-6 border-l-2 border-slate-200">
-                {['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO', 'EN_CAMINO', 'ENTREGADO'].map(s => {
-                  const statuses = ['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO', 'EN_CAMINO', 'ENTREGADO'];
+                {['RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO'].map(s => {
+                  const statuses = ['RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO'];
                   const currentIdx = statuses.indexOf(trackingDrawerOrder.status);
                   const stepIdx = statuses.indexOf(s);
                   const done = stepIdx <= currentIdx;

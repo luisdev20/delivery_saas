@@ -4,9 +4,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
-  ChefHat, Bell, CheckCircle2, Clock, Volume2, VolumeX,
-  Maximize2, Minimize2, Flame, PackageCheck, AlertCircle,
-  Check, RefreshCw, Sparkles
+  Boxes, Bell, CheckCircle2, Clock, Volume2, VolumeX,
+  Maximize2, Minimize2, PackageCheck, AlertCircle,
+  Check, Layers, Sparkles, UserCheck, ShieldCheck,
 } from 'lucide-react';
 import type { Restaurant, Order, OrderStatus } from '@/lib/supabase/types';
 
@@ -15,7 +15,7 @@ interface Props {
   initialOrders: Order[];
 }
 
-function playKitchenChime() {
+function playPackingChime() {
   try {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
@@ -47,7 +47,7 @@ function formatElapsedMinutes(createdAt: string): { text: string; minutes: numbe
   };
 }
 
-export default function KdsClient({ restaurant, initialOrders }: Props) {
+export default function PackingClient({ restaurant, initialOrders }: Props) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -83,15 +83,15 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
       .from('orders')
       .select('*, order_items(*)')
       .eq('restaurant_id', restaurant.id)
-      .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO_PARA_ENTREGA', 'ASIGNADO'])
+      .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO'])
       .order('created_at', { ascending: true });
     if (data) setOrders(data as Order[]);
   }, [restaurant.id, supabase]);
 
-  // Realtime Supabase Subscription for kitchen orders
+  // Realtime Supabase Subscription for packing orders
   useEffect(() => {
     const channel = supabase
-      .channel(`kds-${restaurant.id}`)
+      .channel(`packing-${restaurant.id}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -107,8 +107,8 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
 
           if (newOrder) {
             setOrders(prev => [newOrder as Order, ...prev]);
-            if (soundEnabled) playKitchenChime();
-            toast.info(`🔔 ¡Nueva comanda #${newOrder.order_number}!`);
+            if (soundEnabled) playPackingChime();
+            toast.info(`📦 ¡Nuevo requerimiento de despacho #${newOrder.order_number}!`);
           }
         } else if (payload.eventType === 'UPDATE') {
           const updated = payload.new as Order;
@@ -126,7 +126,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [restaurant.id, soundEnabled, supabase]);
 
-  // Advance order status (RECIBIDO -> EN_PREPARACION -> LISTO_PARA_ENTREGA)
+  // Advance order status (RECIBIDO -> EN_PREPARACION -> LISTO)
   const advanceStatus = async (orderId: string, nextStatus: OrderStatus) => {
     setUpdatingId(orderId);
     try {
@@ -136,10 +136,10 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
         .eq('id', orderId);
       if (error) throw error;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
-      if (nextStatus === 'LISTO_PARA_ENTREGA') {
-        toast.success(`Comanda marcada como LISTA para entrega`);
+      if (nextStatus === 'LISTO') {
+        toast.success(`Paquete marcado como LISTO para despacho`);
       } else if (nextStatus === 'EN_PREPARACION') {
-        toast.success(`Comanda en preparación`);
+        toast.success(`Paquete en proceso de armado y empaque`);
       }
     } catch {
       toast.error('Error al actualizar el estado de la orden');
@@ -160,31 +160,31 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
     setCheckedItems(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
-  const kdsNuevos = useMemo(() => orders.filter(o => o.status === 'RECIBIDO'), [orders]);
-  const kdsPrep = useMemo(() => orders.filter(o => o.status === 'EN_PREPARACION'), [orders]);
-  const kdsListos = useMemo(() => orders.filter(o => ['LISTO_PARA_ENTREGA', 'ASIGNADO'].includes(o.status)), [orders]);
+  const packingNuevos = useMemo(() => orders.filter(o => o.status === 'RECIBIDO'), [orders]);
+  const packingPrep = useMemo(() => orders.filter(o => o.status === 'EN_PREPARACION'), [orders]);
+  const packingListos = useMemo(() => orders.filter(o => o.status === 'LISTO'), [orders]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-900 select-none overflow-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
 
-      {/* ===== KDS HEADER ===== */}
+      {/* ===== PACKING HEADER ===== */}
       <header className="flex-shrink-0 bg-indigo-950 text-white border-b border-indigo-800/80 px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-md z-20">
         <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
-            <ChefHat size={18} className="sm:hidden" />
-            <ChefHat size={22} className="hidden sm:block" />
+            <Boxes size={18} className="sm:hidden" />
+            <Boxes size={22} className="hidden sm:block" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-xs sm:text-base font-extrabold text-white tracking-wide uppercase truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">
-                KDS &middot; {restaurant.name}
+                Packing &middot; {restaurant.name}
               </h1>
               <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                 En Vivo
               </span>
             </div>
             <p className="hidden sm:block text-xs text-indigo-300 font-medium truncate">
-              Pantalla de Operaciones y Cocina
+              Estación de Preparación, Empaque y Despacho
             </p>
           </div>
         </div>
@@ -193,107 +193,91 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
         <div className="hidden lg:flex items-center gap-2.5">
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-blue-200">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            Nuevos: <span className="text-white font-bold">{kdsNuevos.length}</span>
+            Nuevos: <span className="text-white font-bold">{packingNuevos.length}</span>
           </div>
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-amber-200">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            Cocinando: <span className="text-white font-bold">{kdsPrep.length}</span>
+            En Preparación: <span className="text-white font-bold">{packingPrep.length}</span>
           </div>
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            Listos: <span className="text-white font-bold">{kdsListos.length}</span>
+            Listos: <span className="text-white font-bold">{packingListos.length}</span>
           </div>
         </div>
 
-        {/* Right Actions: Clock, Sound, Refresh, Fullscreen */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <div className="hidden sm:flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-indigo-900/80 border border-indigo-700/80 text-xs font-mono font-bold text-indigo-200">
-            <Clock size={13} className="text-amber-400" />
-            {currentTime || '--:--:--'}
+        {/* Right Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 text-indigo-200 font-mono text-xs font-bold">
+            <Clock size={13} />
+            <span>{currentTime}</span>
           </div>
 
           <button
             onClick={() => setSoundEnabled(s => !s)}
-            className={`p-1.5 sm:p-2 rounded-lg border transition-colors ${
+            className={`p-1.5 sm:p-2 rounded-lg border text-xs font-bold transition-colors ${
               soundEnabled
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-indigo-900/60 text-indigo-400 border-indigo-800 hover:text-white'
+                ? 'bg-indigo-900/80 border-indigo-700 text-indigo-200 hover:bg-indigo-800'
+                : 'bg-red-950/80 border-red-800 text-red-300'
             }`}
-            title={soundEnabled ? 'Alerta sonora activada' : 'Alerta sonora silenciada'}
+            title={soundEnabled ? 'Silenciar alertas' : 'Activar sonido'}
           >
-            {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-          </button>
-
-          <button
-            onClick={refreshOrders}
-            className="p-1.5 sm:p-2 rounded-lg bg-indigo-900/80 text-indigo-200 border border-indigo-700/80 hover:bg-indigo-800 hover:text-white transition-colors"
-            title="Recargar comandas"
-          >
-            <RefreshCw size={15} />
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
 
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 sm:p-2 rounded-lg bg-indigo-900/80 text-indigo-200 border border-indigo-700/80 hover:bg-indigo-800 hover:text-white transition-colors"
-            title="Pantalla completa"
+            className="p-1.5 sm:p-2 rounded-lg border border-indigo-700/80 bg-indigo-900/80 text-indigo-200 hover:bg-indigo-800 transition-colors"
+            title="Pantalla Completa"
           >
-            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
       </header>
 
-      {/* ===== MOBILE SEGMENTED TABS (Solo para celular vertical / < sm) ===== */}
-      <div className="sm:hidden flex items-center p-1.5 bg-indigo-950 border-b border-indigo-800/80 gap-1.5 shrink-0 z-10">
+      {/* ===== MOBILE SEGMENTED CONTROL TAB BAR ===== */}
+      <div className="sm:hidden flex bg-white border-b border-slate-200 p-1.5 gap-1.5 shrink-0 shadow-xs">
         <button
           onClick={() => setMobileTab('nuevos')}
-          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             mobileTab === 'nuevos'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-indigo-200 hover:bg-indigo-900/60'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-600'
           }`}
         >
-          <span>1. Nuevos</span>
-          <span className="bg-white/20 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
-            {kdsNuevos.length}
-          </span>
+          <Bell size={13} />
+          <span>Nuevos ({packingNuevos.length})</span>
         </button>
 
         <button
           onClick={() => setMobileTab('prep')}
-          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             mobileTab === 'prep'
-              ? 'bg-amber-500 text-slate-950 shadow-sm'
-              : 'text-indigo-200 hover:bg-indigo-900/60'
+              ? 'bg-amber-500 text-slate-950 shadow-xs'
+              : 'bg-slate-100 text-slate-600'
           }`}
         >
-          <span>2. Cocinando</span>
-          <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-            mobileTab === 'prep' ? 'bg-slate-950/20 text-slate-950' : 'bg-white/20 text-white'
-          }`}>
-            {kdsPrep.length}
-          </span>
+          <Layers size={13} />
+          <span>Preparación ({packingPrep.length})</span>
         </button>
 
         <button
           onClick={() => setMobileTab('listos')}
-          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             mobileTab === 'listos'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-indigo-200 hover:bg-indigo-900/60'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-600'
           }`}
         >
-          <span>3. Listos</span>
-          <span className="bg-white/20 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
-            {kdsListos.length}
-          </span>
+          <PackageCheck size={13} />
+          <span>Listos ({packingListos.length})</span>
         </button>
       </div>
 
-      {/* ===== KANBAN LANES (Responsive Multi-device Layout) ===== */}
-      <main className="flex-1 min-h-0 p-2 sm:p-4 lg:p-6 bg-[#F1F5F9] overflow-hidden">
-        <div className="h-full w-full sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:grid-rows-2 lg:grid-rows-1 gap-2.5 sm:gap-4 lg:gap-6 min-h-0">
+      {/* ===== 3-COLUMN PACKING BOARD ===== */}
+      <main className="flex-1 p-2 sm:p-4 overflow-hidden min-h-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 h-full min-h-0">
 
-          {/* COLUMN 1: NUEVOS (RECIBIDO) */}
+          {/* COLUMN 1: NUEVOS REQUERIMIENTOS */}
           <section className={`
             flex-col rounded-xl sm:rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden h-full min-h-0 min-w-0 sm:col-span-1 lg:col-span-1 sm:row-span-1
             ${mobileTab === 'nuevos' ? 'flex' : 'hidden sm:flex'}
@@ -301,26 +285,26 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
             <div className="p-2 sm:p-3.5 bg-blue-50/80 border-b border-blue-100 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-blue-100 flex items-center justify-center text-blue-700 shrink-0">
-                  <Bell size={12} className={kdsNuevos.length > 0 ? 'animate-bounce' : ''} />
+                  <Bell size={12} className={packingNuevos.length > 0 ? 'animate-bounce' : ''} />
                 </div>
                 <h2 className="font-extrabold text-[10px] sm:text-xs text-blue-900 uppercase tracking-wider truncate">
                   1. Nuevos &middot; Por Preparar
                 </h2>
               </div>
               <span className="bg-blue-600 text-white font-black text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full shadow-xs shrink-0">
-                {kdsNuevos.length}
+                {packingNuevos.length}
               </span>
             </div>
 
             <div className="flex-1 p-2 sm:p-3 lg:p-4 overflow-y-auto space-y-2.5 sm:space-y-3.5 bg-slate-50/40 min-h-0">
-              {kdsNuevos.length === 0 ? (
+              {packingNuevos.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12 text-slate-400">
                   <CheckCircle2 size={28} className="mb-1 text-slate-300 sm:w-8 sm:h-8" />
-                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Sin comandas pendientes</p>
-                  <p className="text-[10px] text-slate-400">Los nuevos pedidos aparecerán aquí</p>
+                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Sin requerimientos pendientes</p>
+                  <p className="text-[10px] text-slate-400">Los nuevos despachos aparecerán aquí</p>
                 </div>
               ) : (
-                kdsNuevos.map(order => {
+                packingNuevos.map(order => {
                   const elapsed = formatElapsedMinutes(order.created_at);
                   const isUrgent = elapsed.minutes >= 15;
                   return (
@@ -332,23 +316,41 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                           : 'border-slate-200 hover:border-indigo-400 hover:shadow-md'
                       }`}
                     >
-                      {/* Ticket Header */}
+                      {/* Header */}
                       <div className="flex justify-between items-start mb-2 pb-1.5 border-b border-slate-100">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                               #{order.order_number}
                             </span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                              {order.payment_method}
-                            </span>
+                            {(() => {
+                              const origin = order.origin_system || (order.notes?.match(/\[(.*?)\]/)?.[1]) || 'API';
+                              if (origin.includes('RESTAURANTE') || origin.includes('Fuego')) {
+                                return (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                    🔥 Restaurante
+                                  </span>
+                                );
+                              }
+                              if (origin.includes('LIBRERIA') || origin.includes('Atenea')) {
+                                return (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                    📚 Librería
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                  {origin}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <p className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
                             {order.customer_name}
                           </p>
                         </div>
 
-                        {/* Timer Badge */}
                         <div className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 shrink-0 ${
                           isUrgent
                             ? 'bg-red-600 text-white'
@@ -361,7 +363,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         </div>
                       </div>
 
-                      {/* Order Notes */}
+                      {/* Notes */}
                       {order.notes && (
                         <div className="mb-2 p-1.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium flex items-start gap-1.5">
                           <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
@@ -372,7 +374,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         </div>
                       )}
 
-                      {/* Dish Items Checklist */}
+                      {/* Package Checklist */}
                       <div className="space-y-1 mb-2.5">
                         {order.order_items?.map(item => {
                           const isChecked = !!checkedItems[item.id];
@@ -410,7 +412,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         disabled={updatingId === order.id}
                         className="w-full py-1.5 sm:py-2 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all"
                       >
-                        <Flame size={12} />
+                        <Layers size={12} />
                         <span className="truncate">{updatingId === order.id ? '...' : 'Comenzar Preparación'}</span>
                       </button>
                     </div>
@@ -420,7 +422,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
             </div>
           </section>
 
-          {/* COLUMN 2: EN PREPARACIÓN (COCINANDO) */}
+          {/* COLUMN 2: EN PREPARACIÓN / EMPAQUE */}
           <section className={`
             flex-col rounded-xl sm:rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden h-full min-h-0 min-w-0 sm:col-span-1 lg:col-span-1 sm:row-span-1
             ${mobileTab === 'prep' ? 'flex' : 'hidden sm:flex'}
@@ -428,26 +430,26 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
             <div className="p-2 sm:p-3.5 bg-amber-50/80 border-b border-amber-100 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                  <Flame size={12} className="animate-pulse" />
+                  <Layers size={12} className="animate-pulse" />
                 </div>
                 <h2 className="font-extrabold text-[10px] sm:text-xs text-amber-900 uppercase tracking-wider truncate">
-                  2. En Preparación &middot; Cocinando
+                  2. En Preparación &middot; Empaque
                 </h2>
               </div>
               <span className="bg-amber-500 text-slate-950 font-black text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full shadow-xs shrink-0">
-                {kdsPrep.length}
+                {packingPrep.length}
               </span>
             </div>
 
             <div className="flex-1 p-2 sm:p-3 lg:p-4 overflow-y-auto space-y-2.5 sm:space-y-3.5 bg-slate-50/40 min-h-0">
-              {kdsPrep.length === 0 ? (
+              {packingPrep.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12 text-slate-400">
-                  <Flame size={28} className="mb-1 text-slate-300 sm:w-8 sm:h-8" />
-                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Ningún plato en cocina</p>
-                  <p className="text-[10px] text-slate-400">Presiona 'Comenzar Preparación' en la etapa 1</p>
+                  <Boxes size={28} className="mb-1 text-slate-300 sm:w-8 sm:h-8" />
+                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Ningún paquete en preparación</p>
+                  <p className="text-[10px] text-slate-400">Presiona &apos;Comenzar Preparación&apos; en la columna 1</p>
                 </div>
               ) : (
-                kdsPrep.map(order => {
+                packingPrep.map(order => {
                   const elapsed = formatElapsedMinutes(order.created_at);
                   const isUrgent = elapsed.minutes >= 20;
                   return (
@@ -467,7 +469,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                               #{order.order_number}
                             </span>
                             <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                              Cocinando
+                              Preparando
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
@@ -475,7 +477,6 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                           </p>
                         </div>
 
-                        {/* Timer Badge */}
                         <div className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 shrink-0 ${
                           isUrgent
                             ? 'bg-red-600 text-white'
@@ -486,7 +487,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         </div>
                       </div>
 
-                      {/* Order Notes */}
+                      {/* Notes */}
                       {order.notes && (
                         <div className="mb-2 p-1.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium flex items-start gap-1.5">
                           <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
@@ -497,7 +498,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         </div>
                       )}
 
-                      {/* Dish Items Checklist */}
+                      {/* Package Checklist */}
                       <div className="space-y-1 mb-2.5">
                         {order.order_items?.map(item => {
                           const isChecked = !!checkedItems[item.id];
@@ -531,12 +532,12 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
 
                       {/* Action Button */}
                       <button
-                        onClick={() => advanceStatus(order.id, 'LISTO_PARA_ENTREGA')}
+                        onClick={() => advanceStatus(order.id, 'LISTO')}
                         disabled={updatingId === order.id}
                         className="w-full py-1.5 sm:py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all"
                       >
                         <PackageCheck size={12} />
-                        <span className="truncate">{updatingId === order.id ? '...' : 'Listo para Despacho'}</span>
+                        <span className="truncate">{updatingId === order.id ? '...' : 'Listo para Entrega'}</span>
                       </button>
                     </div>
                   );
@@ -545,7 +546,7 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
             </div>
           </section>
 
-          {/* COLUMN 3: LISTOS (BOLSA DE ENTREGA) */}
+          {/* COLUMN 3: LISTOS PARA DESPACHO (ESPERA DE MOTORIZADO) */}
           <section className={`
             flex-col rounded-xl sm:rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden h-full min-h-0 min-w-0 sm:col-span-2 lg:col-span-1 sm:row-span-1
             ${mobileTab === 'listos' ? 'flex' : 'hidden sm:flex'}
@@ -556,38 +557,43 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                   <PackageCheck size={12} />
                 </div>
                 <h2 className="font-extrabold text-[10px] sm:text-xs text-emerald-900 uppercase tracking-wider truncate">
-                  3. Listos &middot; Para Repartidor
+                  3. Listos &middot; Para Despacho
                 </h2>
               </div>
               <span className="bg-emerald-600 text-white font-black text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full shadow-xs shrink-0">
-                {kdsListos.length}
+                {packingListos.length}
               </span>
             </div>
 
             <div className="flex-1 p-2 sm:p-3 lg:p-4 overflow-y-auto space-y-2.5 sm:space-y-3.5 bg-slate-50/40 min-h-0">
-              {kdsListos.length === 0 ? (
+              {packingListos.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12 text-slate-400">
                   <PackageCheck size={28} className="mb-1 text-slate-300 sm:w-8 sm:h-8" />
-                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Sin pedidos listos</p>
-                  <p className="text-[10px] text-slate-400">Aparecerán aquí cuando estén listos para despacho</p>
+                  <p className="text-[11px] sm:text-xs font-semibold text-slate-600">Sin paquetes listos</p>
+                  <p className="text-[10px] text-slate-400">Aparecerán aquí cuando finalice el empaque</p>
                 </div>
               ) : (
-                kdsListos.map(order => {
+                packingListos.map(order => {
                   const elapsed = formatElapsedMinutes(order.created_at);
+                  const isAssigned = Boolean(order.driver_id);
                   return (
                     <div
                       key={order.id}
-                      className="rounded-lg sm:rounded-xl border-2 border-emerald-300 bg-white p-2.5 sm:p-3.5 shadow-sm hover:shadow-md transition-all"
+                      className="rounded-lg sm:rounded-xl border-2 border-emerald-300 bg-white p-2.5 sm:p-3.5 shadow-sm hover:shadow-md transition-all space-y-2"
                     >
                       {/* Ticket Header */}
-                      <div className="flex justify-between items-start mb-2 pb-1.5 border-b border-slate-100">
+                      <div className="flex justify-between items-start pb-1.5 border-b border-slate-100">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                               #{order.order_number}
                             </span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              Listo
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                              isAssigned
+                                ? 'bg-sky-50 text-sky-800 border-sky-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}>
+                              {isAssigned ? 'Asignado' : 'Listo'}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
@@ -595,15 +601,14 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                           </p>
                         </div>
 
-                        {/* Timer Badge */}
                         <div className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
                           <Clock size={10} />
                           {elapsed.text}
                         </div>
                       </div>
 
-                      {/* Dish Items */}
-                      <div className="space-y-1 mb-2.5">
+                      {/* Items */}
+                      <div className="space-y-1">
                         {order.order_items?.map(item => (
                           <div
                             key={item.id}
@@ -617,10 +622,14 @@ export default function KdsClient({ restaurant, initialOrders }: Props) {
                         ))}
                       </div>
 
-                      <div className="p-1.5 rounded bg-emerald-50 border border-emerald-200 text-center">
-                        <span className="text-[10px] font-bold text-emerald-800 flex items-center justify-center gap-1">
-                          <Sparkles size={11} className="text-emerald-600 shrink-0" />
-                          <span className="truncate">Esperando recogida</span>
+                      <div className={`p-1.5 rounded text-center border ${
+                        isAssigned
+                          ? 'bg-sky-50 border-sky-200 text-sky-800'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      }`}>
+                        <span className="text-[10px] font-bold flex items-center justify-center gap-1">
+                          {isAssigned ? <UserCheck size={11} className="text-sky-600 shrink-0" /> : <Sparkles size={11} className="text-emerald-600 shrink-0" />}
+                          <span className="truncate">{isAssigned ? 'Repartidor asignado en camino' : 'Esperando asignación de motorizado'}</span>
                         </span>
                       </div>
                     </div>
