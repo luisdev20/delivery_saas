@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fuego & Carbón — Asador Criollo (E-Commerce)</title>
+  <title>Fuego & Carbón — Asador Criollo & Brasas</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
@@ -17,50 +17,39 @@
 </head>
 <body class="bg-stone-100 text-stone-900 min-h-screen flex flex-col justify-between">
 
-  <!-- TOP BAR: Store Branding & Real Domain Indicator -->
+  <!-- TOP BAR: Store Branding -->
   <header class="bg-stone-900 text-white border-b border-stone-800 sticky top-0 z-30 shadow-md">
     <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-xl shadow-md">
-          🔥
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-extrabold text-base sm:text-lg tracking-tight">Fuego & Carbón</h1>
-            <span class="text-[10px] font-black uppercase bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">
-              puerto :3001
-            </span>
-          </div>
+          <h1 class="font-extrabold text-base sm:text-lg tracking-tight">Fuego & Carbón</h1>
           <p class="text-xs text-stone-400">Asador Criollo & Brasas Tradicionales</p>
         </div>
-      </div>
-
-      <div class="flex items-center gap-2 bg-stone-800/80 border border-stone-700 px-3 py-1.5 rounded-xl text-xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span class="text-stone-300 hidden sm:inline">Conectado a SaaS en</span>
-        <span class="font-mono text-emerald-400 font-bold">localhost:3000</span>
       </div>
     </div>
   </header>
 
   <!-- MAIN CHECKOUT CONTENT -->
-  <main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-8 flex-1">
+  <main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-8 flex-1 space-y-6">
 
     <!-- STEP PROGRESS (1 Carrito -> 2 Envío -> 3 Pago) -->
-    <div class="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex items-center justify-between max-w-xl mx-auto mb-6">
+    <div class="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs flex items-center justify-between max-w-xl mx-auto">
       <div id="step-btn-1" class="flex items-center gap-2 text-red-600 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">1</span>
-        <span>Carrito</span>
+        <span id="step-icon-1" class="w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-xs transition-all">1</span>
+        <span id="step-text-1">Carrito</span>
       </div>
-      <span class="text-stone-300">───</span>
-      <div id="step-btn-2" class="flex items-center gap-2 text-stone-400 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-xs font-bold">2</span>
-        <span>Envío (API)</span>
+      <div id="step-line-1" class="flex-1 mx-3 h-[2px] bg-stone-200 transition-all"></div>
+      <div id="step-btn-2" class="flex items-center gap-2 text-stone-400 font-medium text-xs sm:text-sm">
+        <span id="step-icon-2" class="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-xs font-bold transition-all">2</span>
+        <span id="step-text-2">Envío</span>
       </div>
-      <span class="text-stone-300">───</span>
-      <div id="step-btn-3" class="flex items-center gap-2 text-stone-400 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-xs font-bold">3</span>
-        <span>Pago</span>
+      <div id="step-line-2" class="flex-1 mx-3 h-[2px] bg-stone-200 transition-all"></div>
+      <div id="step-btn-3" class="flex items-center gap-2 text-stone-400 font-medium text-xs sm:text-sm">
+        <span id="step-icon-3" class="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-xs font-bold transition-all">3</span>
+        <span id="step-text-3">Pago</span>
       </div>
     </div>
 
@@ -73,7 +62,7 @@
         <!-- STEP 1: CARRITO -->
         <div id="step-1-view" class="space-y-4">
           <div class="border-b border-stone-100 pb-3">
-            <h2 class="font-extrabold text-lg text-stone-900">1. Tu Selección Gourmet</h2>
+            <h2 class="font-extrabold text-lg text-stone-900">1. Tu Selección</h2>
             <p class="text-xs text-stone-500">Revisa los platos de tu pedido antes de continuar</p>
           </div>
 
@@ -82,43 +71,49 @@
           </div>
 
           <div class="pt-4 border-t border-stone-100 flex justify-end">
-            <button onclick="goToStep(2)" class="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all flex items-center gap-2">
-              <span>Continuar al Envío</span> ➔
+            <button onclick="goToStep(2)" class="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer">
+              <span>Continuar al Envío</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
           </div>
         </div>
 
-        <!-- STEP 2: ENVÍO (INTEGRACIÓN API SAAS) -->
+        <!-- STEP 2: ENVÍO -->
         <div id="step-2-view" class="space-y-4 hidden">
-          <div class="border-b border-stone-100 pb-3 flex justify-between items-center">
-            <div>
-              <div class="flex items-center gap-2">
-                <h2 class="font-extrabold text-lg text-stone-900">2. Método de Entrega</h2>
-                <span class="bg-red-100 text-red-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                  API Cotización
-                </span>
-              </div>
-              <p class="text-xs text-stone-500">Validación de cobertura por radio y cálculo de tarifa por GPS</p>
-            </div>
+          <div class="border-b border-stone-100 pb-3">
+            <h2 class="font-extrabold text-lg text-stone-900">2. Dirección de Despacho</h2>
+            <p class="text-xs text-stone-500">Ingresa tus datos y confirma la ubicación de entrega</p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Nombre Completo *</label>
-              <input id="input-customer-name" type="text" value="Carlos Rodriguez" class="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none" />
+              <input id="input-customer-name" type="text" value="Carlos Rodriguez" class="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-stone-50" />
             </div>
             <div>
               <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Teléfono *</label>
-              <input id="input-customer-phone" type="text" value="987123456" class="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none" />
+              <input id="input-customer-phone" type="text" value="987123456" class="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-stone-50" />
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Dirección de Entrega</label>
             <div class="flex gap-2">
-              <input id="input-address" type="text" value="Av. Arequipa 2450, Lince, Lima" class="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none" />
-              <button onclick="triggerQuoteApi()" id="btn-consult-api" class="bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs px-4 py-2 rounded-xl shrink-0 transition-colors flex items-center gap-1.5">
-                <span>Consultar API</span>
+              <input 
+                id="input-address" 
+                type="text" 
+                value="Av. Arequipa 2450, Lince, Lima" 
+                oninput="onAddressInputChange(this.value)"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();forwardGeocodeAddress(this.value);}"
+                placeholder="Ingresa tu calle o muévete en el mapa..."
+                class="flex-1 px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-stone-50" 
+              />
+              <button 
+                onclick="forwardGeocodeAddress(document.getElementById('input-address').value)" 
+                id="btn-consult-api" 
+                class="bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 transition-colors cursor-pointer"
+              >
+                Verificar Cobertura
               </button>
             </div>
           </div>
@@ -126,31 +121,31 @@
           <!-- Interactive Leaflet Map -->
           <div class="space-y-1">
             <div class="flex justify-between text-xs text-stone-500">
-              <span class="font-medium">Arrastra el pin para seleccionar tu puerta exacta:</span>
+              <span class="font-medium">Confirma la ubicación en el mapa:</span>
               <span id="coords-display" class="font-mono text-[11px] text-stone-400">-12.0864, -77.0328</span>
             </div>
-            <div id="map" class="w-full h-44 rounded-xl border border-stone-300 shadow-inner"></div>
+            <div id="map" class="w-full h-52 rounded-xl border border-stone-300 shadow-inner bg-stone-200"></div>
           </div>
 
-          <!-- Live API Response Box -->
+          <!-- Live Response Box -->
           <div id="api-quote-status" class="p-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 text-xs">
-            <div class="flex justify-between font-bold text-sm">
-              <span id="quote-status-title">✅ Cobertura Confirmada</span>
-              <span id="quote-fee-badge" class="font-black text-red-600">S/ 6.50</span>
+            <div class="flex justify-between items-center font-bold text-sm">
+              <span id="quote-status-title">Cobertura Confirmada</span>
+              <span id="quote-fee-badge" class="font-bold text-red-600 bg-white border border-emerald-200 px-2.5 py-0.5 rounded-md text-xs">S/ 5.00</span>
             </div>
-            <p id="quote-message" class="text-stone-600 text-xs mt-0.5">Dentro del radio máximo de 10 km.</p>
+            <p id="quote-message" class="text-stone-600 text-xs mt-1">Despacho directo disponible para tu zona.</p>
             <div class="flex gap-4 mt-2 font-semibold text-stone-500 text-[11px]">
-              <span id="quote-distance">📏 Distancia: 3.2 km</span>
-              <span id="quote-time">⏱️ Tiempo aprox: ~30 min</span>
+              <span id="quote-distance">Distancia estimada: 3.2 km</span>
+              <span id="quote-time">Tiempo de entrega: ~30 min</span>
             </div>
           </div>
 
           <div class="pt-4 border-t border-stone-100 flex justify-between">
-            <button onclick="goToStep(1)" class="px-4 py-2 rounded-xl border border-stone-300 text-stone-600 font-bold text-xs hover:bg-stone-50">
-              ⬅ Volver
+            <button onclick="goToStep(1)" class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer">
+              Volver al Carrito
             </button>
-            <button onclick="goToStep(3)" id="btn-go-to-payment" class="bg-red-600 hover:bg-red-700 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all">
-              Ir a Pagar ➔
+            <button onclick="goToStep(3)" id="btn-go-to-payment" class="bg-red-600 hover:bg-red-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow-md transition-all cursor-pointer">
+              Continuar al Pago
             </button>
           </div>
         </div>
@@ -159,38 +154,39 @@
         <div id="step-3-view" class="space-y-4 hidden">
           <div class="border-b border-stone-100 pb-3">
             <h2 class="font-extrabold text-lg text-stone-900">3. Método de Pago</h2>
-            <p class="text-xs text-stone-500">Selecciona el método con el que deseas pagar en Fuego & Carbón</p>
+            <p class="text-xs text-stone-500">Selecciona el método de pago para tu pedido</p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label class="p-3.5 rounded-xl border-2 border-red-600 bg-red-50/40 flex flex-col justify-between cursor-pointer">
               <div class="flex justify-between items-center">
-                <span class="text-2xl">📱</span>
+                <span class="font-bold text-xs text-stone-900">Yape / Plin</span>
                 <input type="radio" name="payment" value="YAPE" checked class="text-red-600" />
               </div>
-              <span class="font-bold text-xs text-stone-900 mt-2">Yape Móvil</span>
+              <p class="text-[11px] text-stone-500 mt-2">Pago directo con código QR</p>
             </label>
 
-            <label class="p-3.5 rounded-xl border-2 border-stone-200 hover:border-stone-300 flex flex-col justify-between cursor-pointer">
+            <label class="p-3.5 rounded-xl border-2 border-stone-200 hover:border-stone-300 bg-white flex flex-col justify-between cursor-pointer">
               <div class="flex justify-between items-center">
-                <span class="text-2xl">💳</span>
+                <span class="font-bold text-xs text-stone-900">Tarjeta de Débito / Crédito</span>
                 <input type="radio" name="payment" value="PAGADO_ORIGEN" class="text-red-600" />
               </div>
-              <span class="font-bold text-xs text-stone-900 mt-2">Tarjeta de Crédito</span>
+              <p class="text-[11px] text-stone-500 mt-2">Visa, Mastercard</p>
             </label>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Instrucciones para el motorizado</label>
-            <input id="input-notes" type="text" value="Por favor tocar timbre 302" class="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Notas para la cocina / Despacho</label>
+            <input id="input-notes" type="text" value="Por favor incluir cremas y cubiertos" class="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-stone-50" />
           </div>
 
           <div class="pt-4 border-t border-stone-100 flex justify-between items-center">
-            <button onclick="goToStep(2)" class="px-4 py-2 rounded-xl border border-stone-300 text-stone-600 font-bold text-xs hover:bg-stone-50">
-              ⬅ Volver
+            <button onclick="goToStep(2)" class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer">
+              Modificar Envío
             </button>
-            <button onclick="submitOrderToSaas()" id="btn-submit-order" class="bg-red-600 hover:bg-red-700 text-white font-black text-sm px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center gap-2">
-              <span>Pagar y Despachar</span> 🚀
+            <button onclick="submitOrderToSaas()" id="btn-submit-order" class="bg-red-600 hover:bg-red-700 text-white font-black text-sm px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer">
+              <span>Confirmar Pedido</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
           </div>
         </div>
@@ -206,117 +202,157 @@
         <div class="space-y-2 text-xs text-stone-600">
           <div class="flex justify-between">
             <span>Subtotal de platos:</span>
-            <span id="summary-subtotal" class="font-bold text-stone-800">S/ 92.50</span>
+            <span id="summary-subtotal" class="font-bold text-stone-800">S/ 62.00</span>
           </div>
           <div class="flex justify-between items-center">
             <span>Costo de Envío:</span>
-            <span id="summary-delivery" class="font-bold text-red-600">S/ 6.50</span>
+            <span id="summary-delivery" class="font-bold text-stone-900">S/ 5.00</span>
           </div>
         </div>
 
         <div class="pt-3 border-t border-stone-200 flex justify-between items-baseline">
           <span class="font-extrabold text-sm text-stone-900">Total a Pagar:</span>
-          <span id="summary-grandtotal" class="font-black text-2xl text-red-600">S/ 99.00</span>
-        </div>
-
-        <!-- DaaS Live Inspector Box -->
-        <div class="bg-stone-900 text-stone-200 rounded-xl p-3.5 text-xs space-y-2 border border-stone-800">
-          <div class="flex justify-between items-center font-bold text-[11px] text-stone-300">
-            <span class="text-amber-400 flex items-center gap-1">⚡ Inspección API DaaS</span>
-            <span class="font-mono text-[9px] text-stone-500">REST Client</span>
-          </div>
-          <p class="text-[10px] text-stone-400 leading-snug">
-            Esta tienda llama a <code class="text-emerald-400 font-mono">http://localhost:3000/api/v1/orders</code> con su propia cabecera <code class="text-indigo-300 font-mono">x-api-key</code>.
-          </p>
+          <span id="summary-grandtotal" class="font-black text-2xl text-red-600">S/ 67.00</span>
         </div>
       </div>
 
     </div>
 
     <!-- SUCCESS SCREEN OVERLAY -->
-    <div id="success-screen" class="hidden bg-white rounded-3xl p-6 sm:p-10 border border-stone-200 shadow-xl max-w-xl mx-auto text-center space-y-6">
-      <div class="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center mx-auto text-3xl shadow-lg">
-        ✓
+    <div id="success-screen" class="hidden bg-white rounded-3xl p-8 sm:p-10 border border-stone-200 shadow-xl max-w-lg mx-auto text-center space-y-6">
+      
+      <div class="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
-      <div>
-        <span class="text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full">
-          Pago Procesado &bull; Despacho Activo
+
+      <div class="space-y-2">
+        <span class="text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full inline-block">
+          Pedido Registrado con Éxito
         </span>
-        <h2 class="text-2xl font-black text-stone-900 mt-2">¡Gracias por tu compra en Fuego & Carbón!</h2>
-        <p class="text-xs text-stone-500 mt-1">
-          Tu pedido <strong id="success-order-num" class="text-stone-800">#ORD-101</strong> ha sido transmitido en tiempo real a la Estación de Packing.
+        <h2 class="text-2xl font-black text-stone-900">¡Gracias por tu pedido en Fuego & Carbón!</h2>
+        <p class="text-xs text-stone-500">
+          Tu orden <strong id="success-order-num" class="text-stone-800 font-mono font-bold">#ORD-101</strong> ha sido enviada a cocina.
         </p>
       </div>
 
-      <!-- Anti-fraud PIN -->
-      <div class="bg-gradient-to-r from-stone-900 to-red-950 text-white rounded-2xl p-5 shadow-md flex items-center justify-between gap-4 text-left">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-wider text-amber-300">Código PIN de Validación</p>
-          <p class="text-xs text-stone-300">Dicta este código al motorizado para recibir tu comida:</p>
-        </div>
-        <div id="success-pin" class="bg-white text-stone-950 font-mono font-black text-2xl px-5 py-2 rounded-xl tracking-[0.2em] shadow-inner border-2 border-amber-400">
-          ----
-        </div>
+      <!-- Action Button Container -->
+      <div class="pt-2 space-y-2">
+        <a id="btn-tracking-active" href="#" target="_blank" class="w-full py-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-lg transition-all text-center flex items-center justify-center gap-2 cursor-pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
+          <span>Rastrear Entrega en Vivo</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <p class="text-[11px] text-stone-500 text-center">
+          Haz clic para abrir la pantalla de seguimiento en vivo con tu PIN y mapa GPS.
+        </p>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="space-y-3">
-        <a id="btn-open-tracking" href="#" target="_blank" class="block w-full py-3.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm shadow-md transition-all">
-          🚀 Rastrear Motorizado por GPS en Tiempo Real ↗
-        </a>
-        <a href="http://localhost:3000/packing" target="_blank" class="block w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs border border-stone-200">
-          📦 Ver cómo ingresó al Tablero de Packing (SaaS) ↗
-        </a>
-      </div>
     </div>
 
   </main>
 
-  <footer class="bg-white border-t border-stone-200 py-3 text-center text-xs text-stone-400">
-    Fuego & Carbón &bull; Tienda externa operando en puerto 3001
+  <footer class="bg-stone-900 text-stone-400 py-6 px-4 text-xs text-center border-t border-stone-800">
+    <p>&copy; 2026 Fuego & Carbón &bull; Asador Criollo. Todos los derechos reservados.</p>
   </footer>
 
-  <!-- SCRIPT -->
   <script>
     const SAAS_URL = 'http://localhost:3000';
-    const STORE_SLUG = 'fuego-carbon';
+    const RESTAURANT_LAT = -12.0782;
+    const RESTAURANT_LNG = -77.0854;
 
     const products = [
-      { id: '1', name: 'Lomo Saltado a la Leña', price: 48.00, qty: 1, img: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=300&q=80' },
-      { id: '2', name: 'Arroz con Pato Norteño', price: 44.50, qty: 1, img: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=300&q=80' },
+      { id: '1', name: 'Pollo a la Brasa (1/4) con Papas y Ensalada', price: 22.00, qty: 2 },
+      { id: '2', name: 'Anticuchos Clásicos de Corazón (2 sticks)', price: 18.00, qty: 1 }
     ];
 
-    let currentLat = -12.0864;
-    let currentLng = -77.0328;
-    let deliveryFee = 6.50;
+    let currentLat = -12.0852;
+    let currentLng = -77.0300;
     let mapInstance = null;
-    let markerInstance = null;
+    let customerMarker = null;
+    let restaurantMarker = null;
+    let routePolyline = null;
+    let deliveryFee = 5.00;
+    let activePollInterval = null;
 
     function renderCart() {
       const container = document.getElementById('cart-items-container');
       container.innerHTML = products.map(p => `
-        <div class="py-3 flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3">
-            <img src="${p.img}" class="w-12 h-12 object-cover rounded-xl border border-stone-200" />
-            <div>
-              <p class="font-bold text-sm text-stone-800">${p.name}</p>
-              <p class="text-xs font-bold text-red-600">S/ ${p.price.toFixed(2)}</p>
-            </div>
+        <div class="py-3.5 flex justify-between items-center">
+          <div>
+            <p class="font-bold text-sm text-stone-900">${p.name}</p>
+            <p class="text-xs text-stone-500 font-medium">S/ ${p.price.toFixed(2)} x ${p.qty} unidad(es)</p>
           </div>
-          <div class="flex items-center gap-2 bg-stone-100 px-2 py-1 rounded-lg">
-            <span class="text-xs font-bold text-stone-700">Cant: ${p.qty}</span>
+          <div class="text-right">
+            <span class="font-black text-sm text-stone-900">S/ ${(p.price * p.qty).toFixed(2)}</span>
           </div>
         </div>
       `).join('');
+
       updateTotals();
     }
 
     function updateTotals() {
       const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
-      const total = subtotal + deliveryFee;
       document.getElementById('summary-subtotal').innerText = `S/ ${subtotal.toFixed(2)}`;
       document.getElementById('summary-delivery').innerText = `S/ ${deliveryFee.toFixed(2)}`;
-      document.getElementById('summary-grandtotal').innerText = `S/ ${total.toFixed(2)}`;
+      document.getElementById('summary-grandtotal').innerText = `S/ ${(subtotal + deliveryFee).toFixed(2)}`;
+    }
+
+    function updateStepIndicator(step) {
+      const icon1 = document.getElementById('step-icon-1');
+      const text1 = document.getElementById('step-text-1');
+      const line1 = document.getElementById('step-line-1');
+
+      const icon2 = document.getElementById('step-icon-2');
+      const text2 = document.getElementById('step-text-2');
+      const line2 = document.getElementById('step-line-2');
+
+      const icon3 = document.getElementById('step-icon-3');
+      const text3 = document.getElementById('step-text-3');
+
+      if (step === 1) {
+        icon1.className = 'w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold';
+        icon1.innerText = '1';
+        text1.className = 'text-red-600 font-bold text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-stone-200';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold';
+        icon2.innerText = '2';
+        text2.className = 'text-stone-400 font-medium text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-stone-200';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold';
+        icon3.innerText = '3';
+        text3.className = 'text-stone-400 font-medium text-xs sm:text-sm';
+      } else if (step === 2) {
+        icon1.className = 'w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold';
+        icon1.innerHTML = '&#10003;';
+        text1.className = 'text-stone-900 font-semibold text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-red-600';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold';
+        icon2.innerText = '2';
+        text2.className = 'text-red-600 font-bold text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-stone-200';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold';
+        icon3.innerText = '3';
+        text3.className = 'text-stone-400 font-medium text-xs sm:text-sm';
+      } else if (step === 3) {
+        icon1.className = 'w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold';
+        icon1.innerHTML = '&#10003;';
+        text1.className = 'text-stone-900 font-medium text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-red-600';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold';
+        icon2.innerHTML = '&#10003;';
+        text2.className = 'text-stone-900 font-medium text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-red-600';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold';
+        icon3.innerText = '3';
+        text3.className = 'text-red-600 font-bold text-xs sm:text-sm';
+      }
     }
 
     function goToStep(step) {
@@ -326,125 +362,215 @@
 
       document.getElementById(`step-${step}-view`).classList.remove('hidden');
 
-      // Update stepper header
-      for (let i = 1; i <= 3; i++) {
-        const el = document.getElementById(`step-btn-${i}`);
-        if (i === step) {
-          el.className = 'flex items-center gap-2 text-red-600 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-xs';
-        } else if (i < step) {
-          el.className = 'flex items-center gap-2 text-emerald-600 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold';
-        } else {
-          el.className = 'flex items-center gap-2 text-stone-400 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-xs font-bold';
-        }
-      }
+      updateStepIndicator(step);
 
-      if (step === 2 && !mapInstance) {
-        setTimeout(initMap, 100);
+      if (step === 2) {
+        initOrUpdateMap();
       }
     }
 
-    function initMap() {
-      mapInstance = L.map('map').setView([currentLat, currentLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(mapInstance);
+    function initOrUpdateMap() {
+      const mapContainer = document.getElementById('map');
+      if (!mapContainer) return;
 
-      markerInstance = L.marker([currentLat, currentLng], { draggable: true }).addTo(mapInstance);
+      if (!mapInstance) {
+        mapInstance = L.map('map', {
+          zoomControl: true,
+          attributionControl: false
+        }).setView([currentLat, currentLng], 14);
 
-      markerInstance.on('dragend', function (e) {
-        const pos = markerInstance.getLatLng();
-        currentLat = pos.lat;
-        currentLng = pos.lng;
-        document.getElementById('coords-display').innerText = `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`;
-        triggerQuoteApi();
-      });
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          maxZoom: 19
+        }).addTo(mapInstance);
 
-      mapInstance.on('click', function(e) {
-        markerInstance.setLatLng(e.latlng);
-        currentLat = e.latlng.lat;
-        currentLng = e.latlng.lng;
-        document.getElementById('coords-display').innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-        triggerQuoteApi();
-      });
+        const restIcon = L.divIcon({
+          className: 'rest-origin-pin',
+          html: `
+            <div style="background-color: #1C1917; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #EF4444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: 2px solid #EF4444;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            </div>
+          `,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17]
+        });
+        restaurantMarker = L.marker([RESTAURANT_LAT, RESTAURANT_LNG], { icon: restIcon }).addTo(mapInstance);
+        restaurantMarker.bindPopup('<b>Fuego & Carbón (Cocina Central)</b><br>Av. La Marina 1234, San Miguel');
+
+        const customerIcon = L.divIcon({
+          className: 'customer-dest-pin',
+          html: `
+            <div style="background-color: #EF4444; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 12px rgba(239,68,68,0.4); border: 2px solid white;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+          `,
+          iconSize: [34, 34],
+          iconAnchor: [17, 34]
+        });
+        customerMarker = L.marker([currentLat, currentLng], { draggable: true, icon: customerIcon }).addTo(mapInstance);
+
+        routePolyline = L.polyline([[RESTAURANT_LAT, RESTAURANT_LNG], [currentLat, currentLng]], {
+          color: '#DC2626',
+          weight: 3.5,
+          dashArray: '6, 8',
+          opacity: 0.85
+        }).addTo(mapInstance);
+
+        customerMarker.on('dragend', function(e) {
+          const pos = e.target.getLatLng();
+          currentLat = pos.lat;
+          currentLng = pos.lng;
+          document.getElementById('coords-display').innerText = `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`;
+          routePolyline.setLatLngs([[RESTAURANT_LAT, RESTAURANT_LNG], [pos.lat, pos.lng]]);
+          reverseGeocode(pos.lat, pos.lng);
+          triggerQuoteApi();
+        });
+
+        mapInstance.on('click', function(e) {
+          customerMarker.setLatLng(e.latlng);
+          currentLat = e.latlng.lat;
+          currentLng = e.latlng.lng;
+          document.getElementById('coords-display').innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+          routePolyline.setLatLngs([[RESTAURANT_LAT, RESTAURANT_LNG], [e.latlng.lat, e.latlng.lng]]);
+          reverseGeocode(e.latlng.lat, e.latlng.lng);
+          triggerQuoteApi();
+        });
+      }
+
+      setTimeout(() => {
+        if (mapInstance) {
+          mapInstance.invalidateSize();
+          mapInstance.fitBounds([[RESTAURANT_LAT, RESTAURANT_LNG], [currentLat, currentLng]], { padding: [40, 40] });
+        }
+      }, 150);
 
       triggerQuoteApi();
     }
 
+    async function reverseGeocode(lat, lng) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.address) {
+            const road = data.address.road || data.address.pedestrian || data.address.suburb || 'Av. Principal';
+            const houseNumber = data.address.house_number ? ` ${data.address.house_number}` : '';
+            const district = data.address.neighbourhood || data.address.suburb || data.address.city_district || data.address.county || 'Lince';
+            document.getElementById('input-address').value = `${road}${houseNumber}, ${district}`;
+          }
+        }
+      } catch (_) {}
+    }
+
+    let geocodeInputDebounce = null;
+    async function forwardGeocodeAddress(addressText) {
+      if (!addressText || addressText.trim().length < 3) return;
+      const query = addressText.toLowerCase().includes('lima') ? addressText : `${addressText}, Lima, Perú`;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            const newLat = parseFloat(data[0].lat);
+            const newLng = parseFloat(data[0].lon);
+            currentLat = newLat;
+            currentLng = newLng;
+            if (customerMarker) customerMarker.setLatLng([newLat, newLng]);
+            if (routePolyline) routePolyline.setLatLngs([[RESTAURANT_LAT, RESTAURANT_LNG], [newLat, newLng]]);
+            if (mapInstance) {
+              mapInstance.setView([newLat, newLng], 15);
+              mapInstance.fitBounds([[RESTAURANT_LAT, RESTAURANT_LNG], [newLat, newLng]], { padding: [40, 40] });
+            }
+            document.getElementById('coords-display').innerText = `${newLat.toFixed(4)}, ${newLng.toFixed(4)}`;
+            triggerQuoteApi();
+          }
+        }
+      } catch (_) {}
+    }
+
+    function onAddressInputChange(val) {
+      if (geocodeInputDebounce) clearTimeout(geocodeInputDebounce);
+      geocodeInputDebounce = setTimeout(() => {
+        forwardGeocodeAddress(val);
+      }, 700);
+    }
+            const district = data.address.neighbourhood || data.address.suburb || data.address.city_district || data.address.county || 'Lima';
+            document.getElementById('input-address').value = `${road}${houseNumber}, ${district}, Lima`;
+          }
+        }
+      } catch (_) {}
+    }
+
     async function triggerQuoteApi() {
       const btn = document.getElementById('btn-consult-api');
-      btn.innerText = 'Consultando...';
-      const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
+      if (btn) btn.innerText = 'Calculando...';
 
       try {
         const res = await fetch(`${SAAS_URL}/api/v1/quotes`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'dtk_live_restaurante'
+          },
           body: JSON.stringify({
-            slug: 'rincon-criollo',
-            delivery_lat: currentLat,
-            delivery_lng: currentLng,
-            subtotal_amount: subtotal
+            merchant_slug: 'fuego-carbon',
+            customer_lat: currentLat,
+            customer_lng: currentLng,
+            items_count: products.length
           })
         });
 
         const data = await res.json();
-        if (data.covered) {
-          deliveryFee = data.delivery_fee || 6.50;
-          document.getElementById('quote-status-title').innerText = '✅ Cobertura Confirmada';
-          document.getElementById('quote-fee-badge').innerText = `S/ ${deliveryFee.toFixed(2)}`;
-          document.getElementById('quote-message').innerText = data.message || 'Despacho directo disponible.';
-          document.getElementById('quote-distance').innerText = `📏 Distancia: ${data.distance_km} km`;
-          document.getElementById('quote-time').innerText = `⏱️ Tiempo aprox: ~${data.estimated_time_minutes} min`;
-          document.getElementById('api-quote-status').className = 'p-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 text-xs';
-          document.getElementById('btn-go-to-payment').disabled = false;
-        } else {
-          document.getElementById('quote-status-title').innerText = '❌ Fuera de Cobertura';
-          document.getElementById('quote-fee-badge').innerText = 'No disponible';
-          document.getElementById('quote-message').innerText = data.message || 'Supera el radio de entrega.';
-          document.getElementById('api-quote-status').className = 'p-3.5 rounded-xl border bg-red-50 border-red-200 text-red-900 text-xs';
-          document.getElementById('btn-go-to-payment').disabled = true;
+        if (res.ok && data.success !== false) {
+          deliveryFee = data.delivery_fee ?? 5.00;
+          const dist = data.distance_km ? data.distance_km.toFixed(1) : '1.8';
+          const time = data.estimated_duration_mins || 20;
+          const isWithin = data.within_coverage ?? true;
+
+          const titleEl = document.getElementById('quote-status-title');
+          const feeEl = document.getElementById('quote-fee-badge');
+          const msgEl = document.getElementById('quote-message');
+          const distEl = document.getElementById('quote-distance');
+          const timeEl = document.getElementById('quote-time');
+          const statusBox = document.getElementById('api-quote-status');
+          const btnPayment = document.getElementById('btn-go-to-payment');
+
+          if (isWithin) {
+            if (titleEl) titleEl.innerText = 'Cobertura Confirmada';
+            if (feeEl) feeEl.innerText = `S/ ${Number(deliveryFee).toFixed(2)}`;
+            if (msgEl) msgEl.innerText = 'Estás dentro del radio de entrega express.';
+            if (distEl) distEl.innerText = `Distancia: ${dist} km`;
+            if (timeEl) timeEl.innerText = `Tiempo aprox: ~${time} min`;
+            if (statusBox) statusBox.className = 'p-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 text-xs';
+            if (btnPayment) btnPayment.disabled = false;
+          } else {
+            if (titleEl) titleEl.innerText = 'Fuera de Cobertura';
+            if (feeEl) feeEl.innerText = 'No disponible';
+            if (msgEl) msgEl.innerText = 'La ubicación seleccionada excede el radio de entrega express de la cocina.';
+            if (distEl) distEl.innerText = `Distancia: ${dist} km`;
+            if (timeEl) timeEl.innerText = 'Excede radio máximo';
+            if (statusBox) statusBox.className = 'p-3.5 rounded-xl border bg-red-50 border-red-200 text-red-700 text-xs';
+            if (btnPayment) btnPayment.disabled = true;
+          }
         }
       } catch (err) {
-        deliveryFee = 6.50;
-        document.getElementById('quote-status-title').innerText = '✅ Cobertura Confirmada (SaaS Live)';
-        document.getElementById('quote-fee-badge').innerText = 'S/ 6.50';
+        console.error('Error in quote api:', err);
       } finally {
-        btn.innerText = 'Consultar API';
+        if (btn) btn.innerText = 'Verificar Cobertura';
         updateTotals();
       }
     }
 
     async function submitOrderToSaas() {
       const btn = document.getElementById('btn-submit-order');
-      btn.innerText = 'Transmitiendo al SaaS...';
+      btn.innerText = 'Generando pedido...';
       btn.disabled = true;
 
       const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
-      const payload = {
-        external_order_id: `FC-${Math.floor(1000 + Math.random() * 9000)}`,
-        origin_system: 'STORE_RESTAURANTE_3001',
-        customer: {
-          name: document.getElementById('input-customer-name').value,
-          phone: document.getElementById('input-customer-phone').value,
-          address: document.getElementById('input-address').value,
-          reference: 'Dpto 302',
-          lat: currentLat,
-          lng: currentLng
-        },
-        items: products.map(p => ({
-          name: p.name,
-          quantity: p.qty,
-          unit_price: p.price
-        })),
-        payment: {
-          method: 'YAPE',
-          total_amount: subtotal + deliveryFee
-        },
-        notes: document.getElementById('input-notes').value
-      };
+      const customerName = document.getElementById('input-customer-name')?.value || 'Carlos Rodriguez';
+      const customerPhone = document.getElementById('input-customer-phone')?.value || '987123456';
+      const customerAddress = document.getElementById('input-address')?.value || 'Av. Arequipa 2450, Lince';
+      const notes = document.getElementById('input-notes')?.value || '';
 
       try {
         const res = await fetch(`${SAAS_URL}/api/v1/orders`, {
@@ -453,26 +579,45 @@
             'Content-Type': 'application/json',
             'x-api-key': 'dtk_live_restaurante'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            merchant_slug: 'fuego-carbon',
+            external_order_id: `FC-${Math.floor(100 + Math.random() * 900)}`,
+            customer: { name: customerName, phone: customerPhone, address: customerAddress, lat: currentLat, lng: currentLng },
+            payment: { method: 'YAPE', total_amount: subtotal + deliveryFee },
+            notes: notes,
+            items: products.map(p => ({ name: p.name, quantity: p.qty, unit_price: p.price }))
+          })
         });
 
         const data = await res.json();
-        const pin = data.pin_code || Math.floor(1000 + Math.random() * 9000).toString();
-        const orderNum = data.order_number || Math.floor(100 + Math.random() * 900);
-        const trackingUrl = data.tracking_url || `${SAAS_URL}/tracking/rincon-criollo`;
 
-        document.getElementById('checkout-container').classList.add('hidden');
-        document.getElementById('success-screen').classList.remove('hidden');
-        document.getElementById('success-pin').innerText = pin;
-        document.getElementById('success-order-num').innerText = `#ORD-${orderNum}`;
-        document.getElementById('btn-open-tracking').href = trackingUrl.startsWith('http') ? trackingUrl : `${SAAS_URL}${trackingUrl}`;
+        if (res.ok && (data.success || data.order_id || data.id || data.order_number)) {
+          const orderNum = data.order_number || (data.order && data.order.order_number) || '101';
+          const orderId = data.order_id || data.id || (data.order && data.order.id);
+
+          const checkoutEl = document.getElementById('checkout-container');
+          if (checkoutEl) checkoutEl.classList.add('hidden');
+
+          const successEl = document.getElementById('success-screen');
+          if (successEl) successEl.classList.remove('hidden');
+
+          const numEl = document.getElementById('success-order-num');
+          if (numEl) numEl.innerText = `#ORD-${orderNum}`;
+
+          const btnActive = document.getElementById('btn-tracking-active');
+          if (btnActive && orderId) {
+            btnActive.href = `${SAAS_URL}/tracking/${orderId}`;
+          }
+        } else {
+          alert(`Inconveniente al procesar: ${data.message || data.error || 'Verifique los datos'}`);
+          btn.disabled = false;
+          btn.innerText = 'Confirmar Pedido';
+        }
       } catch (err) {
-        // Fallback simulation
-        document.getElementById('checkout-container').classList.add('hidden');
-        document.getElementById('success-screen').classList.remove('hidden');
-        document.getElementById('success-pin').innerText = '4829';
-        document.getElementById('success-order-num').innerText = '#ORD-204';
-        document.getElementById('btn-open-tracking').href = `${SAAS_URL}/tracking/rincon-criollo`;
+        console.error('Submit order error:', err);
+        alert('Error de conexión con el servicio de despacho.');
+        btn.disabled = false;
+        btn.innerText = 'Confirmar Pedido';
       }
     }
 

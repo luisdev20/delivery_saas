@@ -3,195 +3,320 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Librería Atenea — Libros, Arte & Papelería (E-Commerce)</title>
+  <title>Librería Atenea — Literatura, Humanidades & Arte</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; }
-    .font-serif-title { font-family: 'Cinzel', serif; }
-    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    :root {
+      --book-burgundy: #782230;
+      --book-burgundy-dark: #581822;
+      --book-gold: #C59B27;
+      --book-paper: #F9F7F2;
+      --book-paper-dark: #EFECE3;
+      --book-text: #242424;
+      --book-muted: #6E6962;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--book-paper);
+      color: var(--book-text);
+    }
+    .font-serif-title {
+      font-family: 'Playfair Display', serif;
+    }
+    .font-serif-editorial {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .book-shadow {
+      box-shadow: 0 10px 25px -5px rgba(50, 40, 30, 0.12), 0 4px 10px -3px rgba(50, 40, 30, 0.07);
+    }
+    .book-spine-effect {
+      position: relative;
+    }
+    .book-spine-effect::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: linear-gradient(to right, rgba(0,0,0,0.25), rgba(255,255,255,0.15) 50%, rgba(0,0,0,0.15));
+      border-radius: 4px 0 0 4px;
+      z-index: 2;
+    }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col justify-between">
+<body class="min-h-screen flex flex-col justify-between">
 
-  <!-- TOP BAR: Store Branding & Real Domain Indicator -->
-  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
-    <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center text-white font-black text-xl shadow-md">
-          📚
+  <!-- TOP ANNOUNCEMENT BAR (Communitas style) -->
+  <div class="bg-[#2B1E1C] text-[#E5D7C7] text-xs py-2 px-4 border-b border-[#3D2B29]">
+    <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center gap-4 text-[11px]">
+        <span>Lun - Sáb: 10:00 - 20:00 &bull; Dom: 11:00 - 19:00</span>
+        <span class="hidden md:inline text-[#8E786B]">|</span>
+        <span class="hidden md:inline">Envíos express en Lima Metropolitana</span>
+      </div>
+      <div class="flex items-center gap-4 text-[11px]">
+        <span class="text-[#D6B575] font-medium">Librería en Miraflores: Av. Larco 456</span>
+        <span class="text-[#8E786B]">|</span>
+        <span>Atención al Lector: (01) 241-2023</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN HEADER (Communitas style) -->
+  <header class="bg-white border-b border-[#E6E0D5] sticky top-0 z-30 shadow-xs">
+    <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between gap-4">
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-lg bg-[#782230] text-[#F9F7F2] flex items-center justify-center font-serif-title text-xl font-bold border border-[#581822] shadow-sm">
+          A
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-serif-title font-bold text-base sm:text-lg tracking-wider">Librería Atenea</h1>
-            <span class="text-[10px] font-black uppercase bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full">
-              puerto :3002
-            </span>
+          <h1 class="font-serif-title font-bold text-lg sm:text-xl text-[#2B1E1C] tracking-wide group-hover:text-[#782230] transition-colors leading-tight">
+            Librería Atenea
+          </h1>
+          <p class="font-serif-editorial italic text-xs text-[#7A6E65] tracking-wide">
+            Literatura, Humanidades & Arte
+          </p>
+        </div>
+      </a>
+
+      <!-- Search Input -->
+      <div class="hidden md:flex flex-1 max-w-md mx-6">
+        <div class="relative w-full">
+          <input
+            type="text"
+            placeholder="Buscar por título, autor, editorial o ISBN..."
+            class="w-full bg-[#FAF8F5] border border-[#DDD6C9] text-xs rounded-full pl-9 pr-4 py-2 text-[#3D352E] placeholder-[#9E948A] focus:outline-none focus:border-[#782230] focus:ring-1 focus:ring-[#782230] transition-all"
+          />
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#8A7F75]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           </div>
-          <p class="text-xs text-slate-400">Libros de Colección, Arte & Papelería Fina</p>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl text-xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span class="text-slate-300 hidden sm:inline">Conectado a SaaS en</span>
-        <span class="font-mono text-emerald-400 font-bold">localhost:3000</span>
+      <!-- Navigation & Cart -->
+      <div class="flex items-center gap-3">
+        <button onclick="scrollToCheckout()" class="flex items-center gap-2 bg-[#782230] hover:bg-[#5E1A25] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span>Mi Cesta (<span id="cart-count-badge">3</span>)</span>
+        </button>
       </div>
     </div>
+
+    <!-- CATEGORY SUB-NAV -->
+    <nav class="bg-[#FAF8F5] border-t border-[#EBE5DA] px-4 py-2 hidden sm:block">
+      <div class="max-w-6xl mx-auto flex items-center justify-between text-xs font-medium text-[#594E45] overflow-x-auto gap-6">
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap text-[#782230] font-bold">Novedades & Destacados</a>
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap">Literatura Hispanoamericana</a>
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap">Filosofía & Ensayo</a>
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap">Historia & Ciencias Sociales</a>
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap">Arte, Diseño & Cine</a>
+        <a href="#catalogo" class="hover:text-[#782230] transition-colors whitespace-nowrap text-[#A3432B] font-semibold">Ofertas Editoriales</a>
+      </div>
+    </nav>
   </header>
 
-  <!-- MAIN CHECKOUT CONTENT -->
-  <main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-8 flex-1">
+  <!-- EDITORIAL HERO / BANNER -->
+  <section class="bg-[#F3EFE6] border-b border-[#E3DDD1] py-8 px-4">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="space-y-2 max-w-xl">
+        <span class="text-[11px] font-bold uppercase tracking-widest text-[#782230] bg-[#E8DFCFC0] px-2.5 py-0.5 rounded">
+          Catálogo Seleccionado &bull; Despacho en el día
+        </span>
+        <h2 class="font-serif-title text-2xl sm:text-3xl text-[#2B1E1C] font-bold leading-snug">
+          Un refugio para lectores exigentes en Lima.
+        </h2>
+        <p class="font-serif-editorial text-base sm:text-lg text-[#5E5247] leading-relaxed">
+          Ediciones cuidadas de literatura universal, clásicos del pensamiento y novedades de las mejores editoriales independientes.
+        </p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-[#D9D1C1] shadow-xs max-w-xs w-full space-y-1.5 text-xs text-[#52473D]">
+        <div class="flex items-center gap-2 font-bold text-[#2B1E1C]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#782230" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h6"/></svg>
+          <span>Despacho con Seguimiento GPS</span>
+        </div>
+        <p class="text-[11px] text-[#73675C]">
+          Todas las compras son empaquetadas con funda protectora y entregadas con mensajería privada.
+        </p>
+      </div>
+    </div>
+  </section>
 
-    <!-- STEP PROGRESS (1 Carrito -> 2 Envío -> 3 Pago) -->
-    <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between max-w-xl mx-auto mb-6">
-      <div id="step-btn-1" class="flex items-center gap-2 text-teal-700 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-teal-700 text-white flex items-center justify-center text-xs font-bold shadow-xs">1</span>
-        <span>Carrito</span>
+  <!-- MAIN SHOPPING & CHECKOUT CONTAINER -->
+  <main id="catalogo" class="max-w-6xl mx-auto w-full px-4 py-8 flex-1 space-y-8">
+
+    <!-- STEP PROGRESS BAR WITH DYNAMIC ROUTE STATUS -->
+    <div class="bg-white rounded-xl p-3.5 sm:p-4 border border-[#E0D8CB] shadow-xs flex items-center justify-between max-w-xl mx-auto">
+      <div id="step-btn-1" class="flex items-center gap-2 text-[#782230] font-bold text-xs sm:text-sm">
+        <span id="step-icon-1" class="w-6 h-6 rounded-full bg-[#782230] text-white flex items-center justify-center text-xs font-bold transition-all">1</span>
+        <span id="step-text-1">Cesta de Libros</span>
       </div>
-      <span class="text-slate-300">───</span>
-      <div id="step-btn-2" class="flex items-center gap-2 text-slate-400 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">2</span>
-        <span>Envío (API)</span>
+      <div id="step-line-1" class="flex-1 mx-3 h-[2px] bg-[#E0D8CB] transition-all"></div>
+      <div id="step-btn-2" class="flex items-center gap-2 text-[#948A7D] font-medium text-xs sm:text-sm">
+        <span id="step-icon-2" class="w-6 h-6 rounded-full bg-[#EDE8DE] text-[#6E6356] flex items-center justify-center text-xs font-bold transition-all">2</span>
+        <span id="step-text-2">Envío a Domicilio</span>
       </div>
-      <span class="text-slate-300">───</span>
-      <div id="step-btn-3" class="flex items-center gap-2 text-slate-400 font-bold text-xs sm:text-sm">
-        <span class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">3</span>
-        <span>Pago</span>
+      <div id="step-line-2" class="flex-1 mx-3 h-[2px] bg-[#E0D8CB] transition-all"></div>
+      <div id="step-btn-3" class="flex items-center gap-2 text-[#948A7D] font-medium text-xs sm:text-sm">
+        <span id="step-icon-3" class="w-6 h-6 rounded-full bg-[#EDE8DE] text-[#6E6356] flex items-center justify-center text-xs font-bold transition-all">3</span>
+        <span id="step-text-3">Confirmación</span>
       </div>
     </div>
 
-    <!-- 2-COLUMN LAYOUT -->
-    <div id="checkout-container" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- 2-COLUMN CHECKOUT GRID -->
+    <div id="checkout-container" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-      <!-- LEFT COLUMN: ACTIVE STEP -->
-      <div class="lg:col-span-7 bg-white rounded-2xl p-5 sm:p-7 border border-slate-200 shadow-sm">
+      <!-- LEFT COLUMN: STEPS VIEW -->
+      <div class="lg:col-span-7 bg-white rounded-2xl p-6 sm:p-7 border border-[#E0D8CB] shadow-xs">
 
-        <!-- STEP 1: CARRITO -->
-        <div id="step-1-view" class="space-y-4">
-          <div class="border-b border-slate-100 pb-3">
-            <h2 class="font-extrabold text-lg text-slate-900">1. Libros & Artículos Seleccionados</h2>
-            <p class="text-xs text-slate-500">Revisa tu carrito de compras de Librería Atenea</p>
+        <!-- STEP 1: CART / CESTA -->
+        <div id="step-1-view" class="space-y-6">
+          <div class="border-b border-[#EBE5D8] pb-3 flex justify-between items-end">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-widest text-[#782230]">Paso 1</span>
+              <h2 class="font-serif-title font-bold text-xl text-[#2B1E1C]">Libros Seleccionados</h2>
+            </div>
+            <span class="text-xs text-[#7A6E63] font-serif-editorial italic">Ediciones disponibles en inventario</span>
           </div>
 
-          <div class="divide-y divide-slate-100" id="cart-items-container">
-            <!-- Items rendered via JS -->
+          <div class="divide-y divide-[#EFE9DC]" id="cart-items-container">
+            <!-- Rendered by JS -->
           </div>
 
-          <div class="pt-4 border-t border-slate-100 flex justify-end">
-            <button onclick="goToStep(2)" class="bg-teal-700 hover:bg-teal-800 active:scale-95 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all flex items-center gap-2">
-              <span>Continuar al Envío</span> ➔
+          <div class="pt-4 border-t border-[#EBE5D8] flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2 text-xs text-[#5E5247]">
+              <input type="checkbox" id="gift-wrap-check" checked class="rounded border-[#C7BEAF] text-[#782230] focus:ring-[#782230]" />
+              <label for="gift-wrap-check" class="cursor-pointer">Incluir empaque de regalo y marcapáginas Atenea (Gratis)</label>
+            </div>
+            <button onclick="goToStep(2)" class="w-full sm:w-auto bg-[#782230] hover:bg-[#5E1A25] active:scale-[0.99] text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <span>Continuar al Envío</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
           </div>
         </div>
 
-        <!-- STEP 2: ENVÍO (INTEGRACIÓN API SAAS) -->
-        <div id="step-2-view" class="space-y-4 hidden">
-          <div class="border-b border-slate-100 pb-3 flex justify-between items-center">
-            <div>
-              <div class="flex items-center gap-2">
-                <h2 class="font-extrabold text-lg text-slate-900">2. Dirección de Despacho</h2>
-                <span class="bg-teal-100 text-teal-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                  API Cotización
-                </span>
-              </div>
-              <p class="text-xs text-slate-500">Verificación de radio y costo de mensajería asegurada</p>
-            </div>
+        <!-- STEP 2: ENVÍO -->
+        <div id="step-2-view" class="space-y-6 hidden">
+          <div class="border-b border-[#EBE5D8] pb-3">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-[#782230]">Paso 2</span>
+            <h2 class="font-serif-title font-bold text-xl text-[#2B1E1C]">Dirección de Despacho en Lima</h2>
+            <p class="text-xs text-[#7A6E63] mt-0.5">Calculamos la ruta óptima de entrega para tu pedido de librería.</p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nombre Completo *</label>
-              <input id="input-customer-name" type="text" value="Lucía Valenzuela" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+              <label class="block text-xs font-bold text-[#4A3F35] uppercase mb-1">Nombre Completo del Lector *</label>
+              <input id="input-customer-name" type="text" value="Lucía Valenzuela" class="w-full px-3.5 py-2.5 rounded-xl border border-[#D5CDBC] bg-[#FAF8F5] text-xs focus:ring-1 focus:ring-[#782230] focus:border-[#782230] focus:outline-none" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Teléfono Móvil *</label>
-              <input id="input-customer-phone" type="text" value="976543210" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+              <label class="block text-xs font-bold text-[#4A3F35] uppercase mb-1">Teléfono Móvil (Para la Entrega) *</label>
+              <input id="input-customer-phone" type="text" value="976543210" class="w-full px-3.5 py-2.5 rounded-xl border border-[#D5CDBC] bg-[#FAF8F5] text-xs focus:ring-1 focus:ring-[#782230] focus:border-[#782230] focus:outline-none" />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Dirección de Entrega</label>
+            <label class="block text-xs font-bold text-[#4A3F35] uppercase mb-1">Dirección de Entrega</label>
             <div class="flex gap-2">
-              <input id="input-address" type="text" value="Av. Larco 743, Miraflores, Lima" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
-              <button onclick="triggerQuoteApi()" id="btn-consult-api" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl shrink-0 transition-colors flex items-center gap-1.5">
-                <span>Consultar API</span>
+              <input 
+                id="input-address" 
+                type="text" 
+                value="Av. Larco 743, Miraflores, Lima" 
+                oninput="onAddressInputChange(this.value)"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();forwardGeocodeAddress(this.value);}"
+                placeholder="Ingresa tu calle o muévete en el mapa..."
+                class="flex-1 px-3.5 py-2.5 rounded-xl border border-[#D5CDBC] bg-[#FAF8F5] text-xs focus:ring-1 focus:ring-[#782230] focus:border-[#782230] focus:outline-none" 
+              />
+              <button 
+                onclick="forwardGeocodeAddress(document.getElementById('input-address').value)" 
+                id="btn-consult-api" 
+                class="bg-[#2B1E1C] hover:bg-[#1A1211] text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 transition-colors cursor-pointer"
+              >
+                Verificar Cobertura
               </button>
             </div>
           </div>
 
           <!-- Interactive Leaflet Map -->
           <div class="space-y-1">
-            <div class="flex justify-between text-xs text-slate-500">
-              <span class="font-medium">Haz clic o arrastra el marcador para fijar la ubicación exacta:</span>
-              <span id="coords-display" class="font-mono text-[11px] text-slate-400">-12.1228, -77.0294</span>
+            <div class="flex justify-between text-xs text-[#706457]">
+              <span class="font-medium">Confirma la ubicación y ruta de entrega en el mapa:</span>
+              <span id="coords-display" class="font-mono text-[11px] text-[#8E7F6F]">-12.1228, -77.0294</span>
             </div>
-            <div id="map" class="w-full h-44 rounded-xl border border-slate-300 shadow-inner"></div>
+            <div id="map" class="w-full h-56 rounded-xl border border-[#D9D1C0] shadow-inner bg-[#EDE8DE]"></div>
           </div>
 
           <!-- Live API Response Box -->
-          <div id="api-quote-status" class="p-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 text-xs">
-            <div class="flex justify-between font-bold text-sm">
-              <span id="quote-status-title">✅ Cobertura Confirmada</span>
-              <span id="quote-fee-badge" class="font-black text-teal-800">S/ 6.50</span>
+          <div id="api-quote-status" class="p-4 rounded-xl border bg-[#F4F9F6] border-[#CFE6DA] text-[#1B4D36] text-xs">
+            <div class="flex justify-between items-center font-bold text-sm">
+              <span id="quote-status-title">Cobertura Confirmada</span>
+              <span id="quote-fee-badge" class="font-bold text-[#782230] bg-white border border-[#E0D5C1] px-2.5 py-0.5 rounded-md text-xs">
+                S/ 6.50
+              </span>
             </div>
-            <p id="quote-message" class="text-slate-600 text-xs mt-0.5">Dentro del radio de cobertura editorial.</p>
-            <div class="flex gap-4 mt-2 font-semibold text-slate-500 text-[11px]">
-              <span id="quote-distance">📏 Distancia: 2.8 km</span>
-              <span id="quote-time">⏱️ Tiempo aprox: ~25 min</span>
+            <p id="quote-message" class="text-[#4D6659] text-xs mt-1">Tu dirección se encuentra dentro de nuestro rango de despacho editorial.</p>
+            <div class="flex gap-4 mt-2 font-medium text-[#4D6659] text-[11px]">
+              <span id="quote-distance">Distancia estimada: 2.8 km</span>
+              <span id="quote-time">Tiempo de entrega: ~30 min</span>
             </div>
           </div>
 
-          <div class="pt-4 border-t border-slate-100 flex justify-between">
-            <button onclick="goToStep(1)" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-slate-50">
-              ⬅ Volver
+          <div class="pt-4 border-t border-[#EBE5D8] flex justify-between">
+            <button onclick="goToStep(1)" class="px-4 py-2.5 rounded-xl border border-[#D5CDBC] text-[#594E45] font-bold text-xs hover:bg-[#FAF8F5] cursor-pointer">
+              Volver a la Cesta
             </button>
-            <button onclick="goToStep(3)" id="btn-go-to-payment" class="bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all">
-              Ir a Pagar ➔
+            <button onclick="goToStep(3)" id="btn-go-to-payment" class="bg-[#782230] hover:bg-[#5E1A25] text-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer">
+              Continuar al Pago
             </button>
           </div>
         </div>
 
         <!-- STEP 3: PAGO -->
-        <div id="step-3-view" class="space-y-4 hidden">
-          <div class="border-b border-slate-100 pb-3">
-            <h2 class="font-extrabold text-lg text-slate-900">3. Método de Pago</h2>
-            <p class="text-xs text-slate-500">Selecciona el método de pago para tu orden de librería</p>
+        <div id="step-3-view" class="space-y-6 hidden">
+          <div class="border-b border-[#EBE5D8] pb-3">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-[#782230]">Paso 3</span>
+            <h2 class="font-serif-title font-bold text-xl text-[#2B1E1C]">Método de Pago</h2>
+            <p class="text-xs text-[#7A6E63] mt-0.5">Elige cómo deseas abonar tu pedido editorial.</p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <label class="p-3.5 rounded-xl border-2 border-teal-700 bg-teal-50/40 flex flex-col justify-between cursor-pointer">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="p-4 rounded-xl border-2 border-[#782230] bg-[#FAF3F4] flex flex-col justify-between cursor-pointer">
               <div class="flex justify-between items-center">
-                <span class="text-2xl">💳</span>
-                <input type="radio" name="payment" value="PAGADO_ORIGEN" checked class="text-teal-700" />
+                <span class="font-bold text-xs text-[#2B1E1C]">Tarjeta de Débito / Crédito</span>
+                <input type="radio" name="payment" value="PAGADO_ORIGEN" checked class="text-[#782230]" />
               </div>
-              <span class="font-bold text-xs text-slate-900 mt-2">Tarjeta de Débito / Crédito</span>
+              <p class="text-[11px] text-[#7A6065] mt-2">Visa, Mastercard, American Express</p>
             </label>
 
-            <label class="p-3.5 rounded-xl border-2 border-slate-200 hover:border-slate-300 flex flex-col justify-between cursor-pointer">
+            <label class="p-4 rounded-xl border-2 border-[#D5CDBC] hover:border-[#A89D8B] bg-white flex flex-col justify-between cursor-pointer">
               <div class="flex justify-between items-center">
-                <span class="text-2xl">📱</span>
-                <input type="radio" name="payment" value="PLIN" class="text-teal-700" />
+                <span class="font-bold text-xs text-[#2B1E1C]">Billetera Digital (Plin / Yape)</span>
+                <input type="radio" name="payment" value="PLIN" class="text-[#782230]" />
               </div>
-              <span class="font-bold text-xs text-slate-900 mt-2">Plin / Yape</span>
+              <p class="text-[11px] text-[#786E63] mt-2">Pago inmediato con código QR</p>
             </label>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Notas de empaque / Instrucciones</label>
-            <input id="input-notes" type="text" value="Empaque para regalo con bolsa sellada" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+            <label class="block text-xs font-bold text-[#4A3F35] uppercase mb-1">Dedicatoria o Instrucciones para el Despachador</label>
+            <input id="input-notes" type="text" value="Empaque para regalo con bolsa sellada y dedicatoria" class="w-full px-3.5 py-2.5 rounded-xl border border-[#D5CDBC] bg-[#FAF8F5] text-xs focus:ring-1 focus:ring-[#782230] focus:border-[#782230] focus:outline-none" />
           </div>
 
-          <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
-            <button onclick="goToStep(2)" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-slate-50">
-              ⬅ Volver
+          <div class="pt-4 border-t border-[#EBE5D8] flex justify-between items-center">
+            <button onclick="goToStep(2)" class="px-4 py-2.5 rounded-xl border border-[#D5CDBC] text-[#594E45] font-bold text-xs hover:bg-[#FAF8F5] cursor-pointer">
+              Modificar Envío
             </button>
-            <button onclick="submitOrderToSaas()" id="btn-submit-order" class="bg-teal-700 hover:bg-teal-800 text-white font-black text-sm px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center gap-2">
-              <span>Pagar y Despachar</span> 🚀
+            <button onclick="submitOrderToSaas()" id="btn-submit-order" class="bg-[#782230] hover:bg-[#5E1A25] text-white font-bold text-xs sm:text-sm px-6 py-3.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer">
+              <span>Confirmar y Despachar</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
           </div>
         </div>
@@ -199,281 +324,485 @@
       </div>
 
       <!-- RIGHT COLUMN: ORDER SUMMARY -->
-      <div class="lg:col-span-5 bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4 self-start">
-        <h3 class="font-extrabold text-sm text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-          Resumen de Compra
-        </h3>
+      <div class="lg:col-span-5 bg-white rounded-2xl p-6 border border-[#E0D8CB] shadow-xs space-y-5 self-start">
+        <div class="border-b border-[#EBE5D8] pb-3">
+          <h3 class="font-serif-title font-bold text-base text-[#2B1E1C]">
+            Resumen de la Cesta
+          </h3>
+          <p class="text-[11px] text-[#7A6E63]">3 ejemplares en tu pedido</p>
+        </div>
 
-        <div class="space-y-2 text-xs text-slate-600">
+        <div class="space-y-3 text-xs text-[#52463B]">
           <div class="flex justify-between">
-            <span>Subtotal de libros:</span>
-            <span id="summary-subtotal" class="font-bold text-slate-800">S/ 154.00</span>
+            <span>Subtotal libros:</span>
+            <span id="summary-subtotal" class="font-bold text-[#2B1E1C]">S/ 154.00</span>
           </div>
           <div class="flex justify-between items-center">
-            <span>Costo de Envío:</span>
-            <span id="summary-delivery" class="font-bold text-teal-800">GRATIS</span>
+            <span>Servicio de Mensajería:</span>
+            <span id="summary-delivery" class="font-bold text-[#1B4D36]">GRATIS (Promoción)</span>
+          </div>
+          <div class="flex justify-between text-[11px] text-[#7A6E63]">
+            <span>Empaque de librería:</span>
+            <span class="font-medium text-[#1B4D36]">Incluido</span>
           </div>
         </div>
 
-        <div class="pt-3 border-t border-slate-200 flex justify-between items-baseline">
-          <span class="font-extrabold text-sm text-slate-900">Total a Pagar:</span>
-          <span id="summary-grandtotal" class="font-black text-2xl text-teal-800">S/ 154.00</span>
+        <div class="pt-4 border-t border-[#EBE5D8] flex justify-between items-baseline">
+          <span class="font-serif-title font-bold text-sm text-[#2B1E1C]">Total a Pagar:</span>
+          <span id="summary-grandtotal" class="font-serif-title font-bold text-2xl text-[#782230]">S/ 154.00</span>
         </div>
 
-        <!-- DaaS Live Inspector Box -->
-        <div class="bg-slate-900 text-slate-200 rounded-xl p-3.5 text-xs space-y-2 border border-slate-800">
-          <div class="flex justify-between items-center font-bold text-[11px] text-slate-300">
-            <span class="text-amber-400 flex items-center gap-1">⚡ Inspección API DaaS</span>
-            <span class="font-mono text-[9px] text-slate-500">REST Client</span>
-          </div>
-          <p class="text-[10px] text-slate-400 leading-snug">
-            Esta tienda llama a <code class="text-emerald-400 font-mono">http://localhost:3000/api/v1/orders</code> con su propia cabecera <code class="text-teal-300 font-mono">x-api-key</code>.
-          </p>
+        <div class="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E5DEC7] text-[11px] text-[#695D50] space-y-1">
+          <p class="font-bold text-[#2B1E1C]">Garantía Editorial Atenea</p>
+          <p>Libros originales, sellados de imprenta y con derecho a cambio en tienda física presentando tu comprobante.</p>
         </div>
       </div>
 
     </div>
 
     <!-- SUCCESS SCREEN OVERLAY -->
-    <div id="success-screen" class="hidden bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xl max-w-xl mx-auto text-center space-y-6">
-      <div class="w-16 h-16 rounded-full bg-teal-700 text-white flex items-center justify-center mx-auto text-3xl shadow-lg">
-        ✓
+    <div id="success-screen" class="hidden bg-white rounded-2xl p-8 sm:p-10 border border-[#E0D8CB] shadow-xl max-w-lg mx-auto text-center space-y-6">
+      
+      <div class="w-16 h-16 rounded-full bg-[#1B4D36] text-white flex items-center justify-center mx-auto shadow-md">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
-      <div>
-        <span class="text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full">
-          Pago Procesado &bull; Despacho Activo
+
+      <div class="space-y-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider bg-[#EAF5EF] text-[#1B4D36] border border-[#CFE6DA] px-3 py-1 rounded-full inline-block">
+          Pedido Registrado con Éxito
         </span>
-        <h2 class="text-2xl font-black text-slate-900 mt-2">¡Gracias por tu compra en Librería Atenea!</h2>
-        <p class="text-xs text-slate-500 mt-1">
-          Tu paquete <strong id="success-order-num" class="text-slate-800">#ORD-102</strong> ha sido transmitido a la Estación de Packing y Preparación.
+        <h2 class="font-serif-title text-2xl font-bold text-[#2B1E1C]">¡Gracias por tu compra en Librería Atenea!</h2>
+        <p class="text-xs text-[#6B5F52]">
+          Tu orden <strong id="success-order-num" class="text-[#2B1E1C] font-mono font-bold">#ORD-102</strong> ha sido recibida en almacén.
         </p>
       </div>
 
-      <!-- Anti-fraud PIN -->
-      <div class="bg-gradient-to-r from-slate-900 to-teal-950 text-white rounded-2xl p-5 shadow-md flex items-center justify-between gap-4 text-left">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-wider text-amber-300">Código PIN de Seguridad</p>
-          <p class="text-xs text-slate-300">Dicta este código al repartidor al momento de la entrega:</p>
-        </div>
-        <div id="success-pin" class="bg-white text-slate-950 font-mono font-black text-2xl px-5 py-2 rounded-xl tracking-[0.2em] shadow-inner border-2 border-amber-400">
-          ----
-        </div>
+      <!-- Action Button -->
+      <div class="pt-2 space-y-2">
+        <a id="btn-tracking-active" href="#" target="_blank" class="w-full py-4 rounded-xl bg-[#782230] hover:bg-[#5E1A25] active:scale-[0.99] text-white font-bold text-sm sm:text-base shadow-lg transition-all text-center flex items-center justify-center gap-2 cursor-pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
+          <span>Rastrear Despacho en Vivo</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <p class="text-[11px] text-[#7A6E63] text-center font-serif-editorial">
+          Haz clic para abrir la pantalla de seguimiento en vivo con tu PIN y mapa GPS.
+        </p>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="space-y-3">
-        <a id="btn-open-tracking" href="#" target="_blank" class="block w-full py-3.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-sm shadow-md transition-all">
-          🚀 Rastrear Entrega por GPS en Tiempo Real ↗
-        </a>
-        <a href="http://localhost:3000/packing" target="_blank" class="block w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200">
-          📦 Ver cómo ingresó al Tablero de Packing (SaaS) ↗
-        </a>
-      </div>
     </div>
 
   </main>
 
-  <footer class="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-400">
-    Librería Atenea &bull; Tienda externa operando en puerto 3002
+  <!-- FOOTER (Communitas style) -->
+  <footer class="bg-[#2B1E1C] text-[#C7B8A8] border-t border-[#3D2C29] mt-12 py-8 px-4 text-xs">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="space-y-2">
+        <h4 class="font-serif-title font-bold text-sm text-white">Librería Atenea</h4>
+        <p class="text-[11px] text-[#A69685] leading-relaxed">
+          Especialistas en literatura clásica y contemporánea, filosofía, historia y arte. Envíos garantizados a todo Lima.
+        </p>
+      </div>
+      <div class="space-y-1.5 text-[11px]">
+        <h4 class="font-serif-title font-bold text-sm text-white mb-2">Visítanos</h4>
+        <p>Av. Larco 456, Miraflores, Lima</p>
+        <p>Teléfono: (01) 241-2023</p>
+        <p>pedidos@libreria-atenea.com</p>
+      </div>
+      <div class="space-y-2 text-[11px]">
+        <h4 class="font-serif-title font-bold text-sm text-white">Métodos de Entrega</h4>
+        <p class="text-[#A69685]">
+          Despachos coordinados a través de mensajería motorizada privada con tracking en tiempo real.
+        </p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto mt-8 pt-4 border-t border-[#3D2C29] text-center text-[10px] text-[#7A6B5C]">
+      &copy; 2026 Librería Atenea. Todos los derechos reservados.
+    </div>
   </footer>
 
-  <!-- SCRIPT -->
   <script>
-    const SAAS_URL = 'http://localhost:3000';
-    const STORE_SLUG = 'libreria-atenea';
+    const STORE_LAT = -12.1215;
+    const STORE_LNG = -77.0298;
 
-    const products = [
-      { id: '1', name: 'Cien Años de Soledad (Ed. Ilustrada)', price: 89.00, qty: 1, img: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=300&q=80' },
-      { id: '2', name: 'Hábitos Atómicos — James Clear', price: 65.00, qty: 1, img: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=300&q=80' },
+    const books = [
+      { id: 'b-101', title: 'La ciudad y los perros', author: 'Mario Vargas Llosa', publisher: 'Alfaguara', format: 'Tapa blanda &bull; 448 págs.', price: 59.00, qty: 1, color: '#782230', coverLetter: 'V' },
+      { id: 'b-102', title: 'Ficciones (Edición Conmemorativa)', author: 'Jorge Luis Borges', publisher: 'Debolsillo', format: 'Tapa blanda &bull; 224 págs.', price: 45.00, qty: 1, color: '#2B3A42', coverLetter: 'B' },
+      { id: 'b-103', title: 'Sapiens: De animales a dioses', author: 'Yuval Noah Harari', publisher: 'Debate', format: 'Rústica &bull; 496 págs.', price: 50.00, qty: 1, color: '#8A5D28', coverLetter: 'S' }
     ];
 
-    let currentLat = -12.1228;
-    let currentLng = -77.0294;
-    let deliveryFee = 0.00; // Subtotal > 120 gets free delivery
-    let mapInstance = null;
-    let markerInstance = null;
+    let currentLat = -12.1180;
+    let currentLng = -77.0188;
+    let map = null;
+    let customerMarker = null;
+    let routePolyline = null;
+    let activePollInterval = null;
 
     function renderCart() {
       const container = document.getElementById('cart-items-container');
-      container.innerHTML = products.map(p => `
-        <div class="py-3 flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3">
-            <img src="${p.img}" class="w-12 h-12 object-cover rounded-xl border border-slate-200" />
-            <div>
-              <p class="font-bold text-sm text-slate-800">${p.name}</p>
-              <p class="text-xs font-bold text-teal-800">S/ ${p.price.toFixed(2)}</p>
-            </div>
+      container.innerHTML = books.map(book => `
+        <div class="p-4 sm:p-5 flex items-start gap-4 hover:bg-[#FAF8F5] transition-colors">
+          <div class="w-14 h-20 rounded-md shadow-sm flex items-center justify-center text-white font-serif-title font-bold text-xl flex-shrink-0" style="background:${book.color};">
+            ${book.coverLetter}
           </div>
-          <div class="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-lg">
-            <span class="text-xs font-bold text-slate-700">Cant: ${p.qty}</span>
+          <div class="flex-1 min-w-0">
+            <span class="text-[10px] uppercase font-bold text-[#A67C52] tracking-wider">${book.publisher}</span>
+            <h4 class="font-serif-title font-bold text-sm text-[#2B1E1C] truncate">${book.title}</h4>
+            <p class="text-xs text-[#6B5F52]">${book.author}</p>
+            <p class="text-[11px] text-[#A69685] mt-1">${book.format}</p>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="font-serif-title font-bold text-sm text-[#782230]">S/ ${book.price.toFixed(2)}</p>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="updateQty('${book.id}', -1)" class="w-6 h-6 rounded border border-[#E0D8CB] bg-white text-[#2B1E1C] font-bold text-xs hover:bg-[#F3EFEA]">-</button>
+              <span class="text-xs font-bold w-4 text-center">${book.qty}</span>
+              <button onclick="updateQty('${book.id}', 1)" class="w-6 h-6 rounded border border-[#E0D8CB] bg-white text-[#2B1E1C] font-bold text-xs hover:bg-[#F3EFEA]">+</button>
+            </div>
           </div>
         </div>
       `).join('');
       updateTotals();
     }
 
+    function updateQty(id, delta) {
+      const b = books.find(item => item.id === id);
+      if (b) {
+        b.qty = Math.max(1, b.qty + delta);
+        renderCart();
+      }
+    }
+
     function updateTotals() {
-      const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
-      const total = subtotal + deliveryFee;
+      const subtotal = books.reduce((sum, b) => sum + (b.price * b.qty), 0);
       document.getElementById('summary-subtotal').innerText = `S/ ${subtotal.toFixed(2)}`;
-      document.getElementById('summary-delivery').innerText = deliveryFee === 0 ? 'GRATIS' : `S/ ${deliveryFee.toFixed(2)}`;
-      document.getElementById('summary-grandtotal').innerText = `S/ ${total.toFixed(2)}`;
+      document.getElementById('summary-grandtotal').innerText = `S/ ${subtotal.toFixed(2)}`;
     }
 
     function goToStep(step) {
-      document.getElementById('step-1-view').classList.add('hidden');
-      document.getElementById('step-2-view').classList.add('hidden');
-      document.getElementById('step-3-view').classList.add('hidden');
-
-      document.getElementById(`step-${step}-view`).classList.remove('hidden');
-
-      // Update stepper header
-      for (let i = 1; i <= 3; i++) {
-        const el = document.getElementById(`step-btn-${i}`);
-        if (i === step) {
-          el.className = 'flex items-center gap-2 text-teal-700 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-teal-700 text-white flex items-center justify-center text-xs font-bold shadow-xs';
-        } else if (i < step) {
-          el.className = 'flex items-center gap-2 text-emerald-600 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold';
-        } else {
-          el.className = 'flex items-center gap-2 text-slate-400 font-bold text-xs sm:text-sm';
-          el.querySelector('span:first-child').className = 'w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold';
-        }
-      }
-
-      if (step === 2 && !mapInstance) {
-        setTimeout(initMap, 100);
+      document.getElementById('step-1-view').classList.toggle('hidden', step !== 1);
+      document.getElementById('step-2-view').classList.toggle('hidden', step !== 2);
+      document.getElementById('step-3-view').classList.toggle('hidden', step !== 3);
+      updateStepIndicator(step);
+      if (step === 2) {
+        initOrUpdateMap();
       }
     }
 
-    function initMap() {
-      mapInstance = L.map('map').setView([currentLat, currentLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(mapInstance);
+    function updateStepIndicator(step) {
+      const icon1 = document.getElementById('step-icon-1');
+      const text1 = document.getElementById('step-text-1');
+      const line1 = document.getElementById('step-line-1');
 
-      markerInstance = L.marker([currentLat, currentLng], { draggable: true }).addTo(mapInstance);
+      const icon2 = document.getElementById('step-icon-2');
+      const text2 = document.getElementById('step-text-2');
+      const line2 = document.getElementById('step-line-2');
 
-      markerInstance.on('dragend', function (e) {
-        const pos = markerInstance.getLatLng();
-        currentLat = pos.lat;
-        currentLng = pos.lng;
-        document.getElementById('coords-display').innerText = `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`;
-        triggerQuoteApi();
-      });
+      const icon3 = document.getElementById('step-icon-3');
+      const text3 = document.getElementById('step-text-3');
 
-      mapInstance.on('click', function(e) {
-        markerInstance.setLatLng(e.latlng);
-        currentLat = e.latlng.lat;
-        currentLng = e.latlng.lng;
-        document.getElementById('coords-display').innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-        triggerQuoteApi();
-      });
+      if (!icon1 || !icon2 || !icon3) return;
+
+      if (step === 1) {
+        icon1.className = 'w-6 h-6 rounded-full bg-[#782230] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon1.innerText = '1';
+        text1.className = 'text-[#782230] font-bold text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-[#E0D8CB] transition-all';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-[#EDE8DE] text-[#6E6356] flex items-center justify-center text-xs font-bold transition-all';
+        icon2.innerText = '2';
+        text2.className = 'text-[#948A7D] font-medium text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-[#E0D8CB] transition-all';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-[#EDE8DE] text-[#6E6356] flex items-center justify-center text-xs font-bold transition-all';
+        icon3.innerText = '3';
+        text3.className = 'text-[#948A7D] font-medium text-xs sm:text-sm';
+      } else if (step === 2) {
+        icon1.className = 'w-6 h-6 rounded-full bg-[#1B4D36] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon1.innerHTML = '&#10003;';
+        text1.className = 'text-[#2B1E1C] font-semibold text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-[#782230] transition-all';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-[#782230] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon2.innerText = '2';
+        text2.className = 'text-[#782230] font-bold text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-[#E0D8CB] transition-all';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-[#EDE8DE] text-[#6E6356] flex items-center justify-center text-xs font-bold transition-all';
+        icon3.innerText = '3';
+        text3.className = 'text-[#948A7D] font-medium text-xs sm:text-sm';
+      } else if (step === 3) {
+        icon1.className = 'w-6 h-6 rounded-full bg-[#1B4D36] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon1.innerHTML = '&#10003;';
+        text1.className = 'text-[#2B1E1C] font-medium text-xs sm:text-sm';
+        line1.className = 'flex-1 mx-3 h-[2px] bg-[#782230] transition-all';
+
+        icon2.className = 'w-6 h-6 rounded-full bg-[#1B4D36] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon2.innerHTML = '&#10003;';
+        text2.className = 'text-[#2B1E1C] font-medium text-xs sm:text-sm';
+        line2.className = 'flex-1 mx-3 h-[2px] bg-[#782230] transition-all';
+
+        icon3.className = 'w-6 h-6 rounded-full bg-[#782230] text-white flex items-center justify-center text-xs font-bold transition-all';
+        icon3.innerText = '3';
+        text3.className = 'text-[#782230] font-bold text-xs sm:text-sm';
+      }
+    }
+
+    function initOrUpdateMap() {
+      const mapContainer = document.getElementById('map');
+      if (!mapContainer) return;
+
+      if (!map) {
+        map = L.map('map').setView([STORE_LAT, STORE_LNG], 14);
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          maxZoom: 19
+        }).addTo(map);
+
+        const storeIcon = L.divIcon({
+          html: `<div style="
+            width:32px;height:32px;background:#782230;
+            border-radius:50%;border:2px solid white;
+            box-shadow:0 3px 10px rgba(0,0,0,0.3);
+            display:flex;align-items:center;justify-content:center;
+            color:white;font-family:serif;font-weight:bold;font-size:14px;
+          ">A</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        });
+        L.marker([STORE_LAT, STORE_LNG], { icon: storeIcon }).addTo(map)
+          .bindPopup('<b>Librería Atenea</b><br>Av. Larco 456, Miraflores');
+
+        const destIcon = L.divIcon({
+          html: `<div style="
+            width:30px;height:30px;background:#C59B27;
+            border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+            border:2.5px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.3);
+          "></div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 30]
+        });
+        customerMarker = L.marker([currentLat, currentLng], { icon: destIcon, draggable: true }).addTo(map);
+
+        routePolyline = L.polyline([[STORE_LAT, STORE_LNG], [currentLat, currentLng]], {
+          color: '#782230',
+          weight: 3.5,
+          dashArray: '6, 8',
+          opacity: 0.85
+        }).addTo(map);
+
+        customerMarker.on('dragend', function(e) {
+          const pos = e.target.getLatLng();
+          currentLat = pos.lat;
+          currentLng = pos.lng;
+          document.getElementById('coords-display').innerText = `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`;
+          routePolyline.setLatLngs([[STORE_LAT, STORE_LNG], [pos.lat, pos.lng]]);
+          reverseGeocode(pos.lat, pos.lng);
+          triggerQuoteApi();
+        });
+
+        map.on('click', function(e) {
+          customerMarker.setLatLng(e.latlng);
+          currentLat = e.latlng.lat;
+          currentLng = e.latlng.lng;
+          document.getElementById('coords-display').innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+          routePolyline.setLatLngs([[STORE_LAT, STORE_LNG], [e.latlng.lat, e.latlng.lng]]);
+          reverseGeocode(e.latlng.lat, e.latlng.lng);
+          triggerQuoteApi();
+        });
+      }
+
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+          map.fitBounds([[STORE_LAT, STORE_LNG], [currentLat, currentLng]], { padding: [40, 40] });
+        }
+      }, 150);
+
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 450);
 
       triggerQuoteApi();
     }
 
-    async function triggerQuoteApi() {
-      const btn = document.getElementById('btn-consult-api');
-      btn.innerText = 'Consultando...';
-      const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
-
+    async function reverseGeocode(lat, lng) {
       try {
-        const res = await fetch(`${SAAS_URL}/api/v1/quotes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slug: 'rincon-criollo',
-            delivery_lat: currentLat,
-            delivery_lng: currentLng,
-            subtotal_amount: subtotal
-          })
-        });
-
-        const data = await res.json();
-        if (data.covered) {
-          deliveryFee = data.delivery_fee || 0;
-          document.getElementById('quote-status-title').innerText = '✅ Cobertura Confirmada';
-          document.getElementById('quote-fee-badge').innerText = deliveryFee === 0 ? 'ENVÍO GRATIS' : `S/ ${deliveryFee.toFixed(2)}`;
-          document.getElementById('quote-message').innerText = data.message || 'Despacho directo disponible.';
-          document.getElementById('quote-distance').innerText = `📏 Distancia: ${data.distance_km} km`;
-          document.getElementById('quote-time').innerText = `⏱️ Tiempo aprox: ~${data.estimated_time_minutes} min`;
-          document.getElementById('api-quote-status').className = 'p-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 text-xs';
-          document.getElementById('btn-go-to-payment').disabled = false;
-        } else {
-          document.getElementById('quote-status-title').innerText = '❌ Fuera de Cobertura';
-          document.getElementById('quote-fee-badge').innerText = 'No disponible';
-          document.getElementById('quote-message').innerText = data.message || 'Supera el radio de entrega.';
-          document.getElementById('api-quote-status').className = 'p-3.5 rounded-xl border bg-red-50 border-red-200 text-red-900 text-xs';
-          document.getElementById('btn-go-to-payment').disabled = true;
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.address) {
+            const road = data.address.road || data.address.pedestrian || data.address.suburb || 'Calle';
+            const houseNumber = data.address.house_number ? ` ${data.address.house_number}` : '';
+            const district = data.address.neighbourhood || data.address.suburb || data.address.city_district || data.address.county || 'Miraflores';
+            document.getElementById('input-address').value = `${road}${houseNumber}, ${district}`;
+          }
         }
-      } catch (err) {
-        deliveryFee = 0.00;
-        document.getElementById('quote-status-title').innerText = '✅ Cobertura Confirmada (SaaS Live)';
-        document.getElementById('quote-fee-badge').innerText = 'ENVÍO GRATIS';
-      } finally {
-        btn.innerText = 'Consultar API';
-        updateTotals();
-      }
+      } catch (_) {}
     }
 
-    async function submitOrderToSaas() {
-      const btn = document.getElementById('btn-submit-order');
-      btn.innerText = 'Transmitiendo al SaaS...';
-      btn.disabled = true;
+    let geocodeInputDebounce = null;
+    async function forwardGeocodeAddress(addressText) {
+      if (!addressText || addressText.trim().length < 3) return;
+      const query = addressText.toLowerCase().includes('lima') ? addressText : `${addressText}, Lima, Perú`;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            const newLat = parseFloat(data[0].lat);
+            const newLng = parseFloat(data[0].lon);
+            currentLat = newLat;
+            currentLng = newLng;
+            if (customerMarker) customerMarker.setLatLng([newLat, newLng]);
+            if (routePolyline) routePolyline.setLatLngs([[STORE_LAT, STORE_LNG], [newLat, newLng]]);
+            if (map) {
+              map.setView([newLat, newLng], 15);
+              map.fitBounds([[STORE_LAT, STORE_LNG], [newLat, newLng]], { padding: [40, 40] });
+            }
+            document.getElementById('coords-display').innerText = `${newLat.toFixed(4)}, ${newLng.toFixed(4)}`;
+            triggerQuoteApi();
+          }
+        }
+      } catch (_) {}
+    }
 
-      const subtotal = products.reduce((acc, p) => acc + (p.price * p.qty), 0);
-      const payload = {
-        external_order_id: `LIB-${Math.floor(1000 + Math.random() * 9000)}`,
-        origin_system: 'STORE_LIBRERIA_3002',
-        customer: {
-          name: document.getElementById('input-customer-name').value,
-          phone: document.getElementById('input-customer-phone').value,
-          address: document.getElementById('input-address').value,
-          reference: 'Dpto 501',
-          lat: currentLat,
-          lng: currentLng
-        },
-        items: products.map(p => ({
-          name: p.name,
-          quantity: p.qty,
-          unit_price: p.price
-        })),
-        payment: {
-          method: 'PAGADO_ORIGEN',
-          total_amount: subtotal + deliveryFee
-        },
-        notes: document.getElementById('input-notes').value
-      };
+    function onAddressInputChange(val) {
+      if (geocodeInputDebounce) clearTimeout(geocodeInputDebounce);
+      geocodeInputDebounce = setTimeout(() => {
+        forwardGeocodeAddress(val);
+      }, 700);
+    }
+
+    async function triggerQuoteApi() {
+      const btn = document.getElementById('btn-consult-api');
+      if (btn) btn.innerText = 'Calculando...';
+
+      const currentInputAddress = document.getElementById('input-address')?.value;
 
       try {
-        const res = await fetch(`${SAAS_URL}/api/v1/orders`, {
+        const res = await fetch('http://localhost:3000/api/v1/quotes', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': 'dtk_live_libreria'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            merchant_slug: 'libreria-atenea',
+            customer_lat: currentLat,
+            customer_lng: currentLng,
+            items_count: 3
+          })
         });
 
         const data = await res.json();
-        const pin = data.pin_code || Math.floor(1000 + Math.random() * 9000).toString();
-        const orderNum = data.order_number || Math.floor(100 + Math.random() * 900);
-        const trackingUrl = data.tracking_url || `${SAAS_URL}/tracking/rincon-criollo`;
+        if (res.ok && data.success !== false) {
+          const fee = data.delivery_fee ?? 6.50;
+          const dist = data.distance_km ? data.distance_km.toFixed(1) : '2.8';
+          const time = data.estimated_duration_mins || data.estimated_time_minutes || 25;
+          const isWithin = data.within_coverage ?? data.covered ?? true;
 
-        document.getElementById('checkout-container').classList.add('hidden');
-        document.getElementById('success-screen').classList.remove('hidden');
-        document.getElementById('success-pin').innerText = pin;
-        document.getElementById('success-order-num').innerText = `#ORD-${orderNum}`;
-        document.getElementById('btn-open-tracking').href = trackingUrl.startsWith('http') ? trackingUrl : `${SAAS_URL}${trackingUrl}`;
+          const titleEl = document.getElementById('quote-status-title');
+          const feeEl = document.getElementById('quote-fee-badge');
+          const msgEl = document.getElementById('quote-message');
+          const distEl = document.getElementById('quote-distance');
+          const timeEl = document.getElementById('quote-time');
+          const statusBox = document.getElementById('api-quote-status');
+          const btnPayment = document.getElementById('btn-go-to-payment');
+
+          if (isWithin) {
+            if (titleEl) titleEl.innerText = 'Cobertura Confirmada';
+            if (feeEl) feeEl.innerText = `S/ ${Number(fee).toFixed(2)}`;
+            if (msgEl) msgEl.innerText = 'Tu dirección se encuentra dentro de nuestro rango de despacho editorial.';
+            if (distEl) distEl.innerText = `Distancia estimada: ${dist} km`;
+            if (timeEl) timeEl.innerText = `Tiempo de entrega: ~${time} min`;
+            if (statusBox) statusBox.className = 'p-4 rounded-xl border bg-[#F4F9F6] border-[#CFE6DA] text-[#1B4D36] text-xs';
+            if (btnPayment) btnPayment.disabled = false;
+          } else {
+            if (titleEl) titleEl.innerText = 'Fuera de Cobertura';
+            if (feeEl) feeEl.innerText = 'No disponible';
+            if (msgEl) msgEl.innerText = 'La ubicación seleccionada excede el radio de entrega express de la librería.';
+            if (distEl) distEl.innerText = `Distancia estimada: ${dist} km`;
+            if (timeEl) timeEl.innerText = 'Excede radio máximo';
+            if (statusBox) statusBox.className = 'p-4 rounded-xl border bg-red-50 border-red-200 text-red-700 text-xs';
+            if (btnPayment) btnPayment.disabled = true;
+          }
+        }
       } catch (err) {
-        // Fallback simulation
-        document.getElementById('checkout-container').classList.add('hidden');
-        document.getElementById('success-screen').classList.remove('hidden');
-        document.getElementById('success-pin').innerText = '9312';
-        document.getElementById('success-order-num').innerText = '#ORD-205';
-        document.getElementById('btn-open-tracking').href = `${SAAS_URL}/tracking/rincon-criollo`;
+        console.error('Error in quote api:', err);
+      } finally {
+        if (btn) btn.innerText = 'Verificar Cobertura';
+      }
+    }
+
+    async function submitOrderToSaas() {
+      const submitBtn = document.getElementById('btn-submit-order');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Generando despacho...';
+
+      const customerName = document.getElementById('input-customer-name')?.value || 'Lucía Valenzuela';
+      const customerPhone = document.getElementById('input-customer-phone')?.value || '976543210';
+      const customerAddress = document.getElementById('input-address')?.value || 'Av. Larco 743, Miraflores, Lima';
+      const notes = document.getElementById('input-notes')?.value || '';
+
+      try {
+        const res = await fetch('http://localhost:3000/api/v1/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'dtk_live_libreria'
+          },
+          body: JSON.stringify({
+            merchant_slug: 'libreria-atenea',
+            external_order_id: `ATENEA-${Math.floor(100 + Math.random() * 900)}`,
+            origin_system: 'LIBRERIA_WEB',
+            customer: {
+              name: customerName,
+              phone: customerPhone,
+              address: customerAddress,
+              lat: currentLat,
+              lng: currentLng
+            },
+            payment: {
+              method: 'YAPE',
+              total_amount: books.reduce((s, b) => s + b.price * b.qty, 0)
+            },
+            notes: notes,
+            items: books.map(b => ({
+              name: `${b.title} (${b.author})`,
+              quantity: b.qty,
+              unit_price: b.price
+            }))
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && (data.success || data.order_id || data.id || data.order_number)) {
+          const orderNum = data.order_number || (data.order && data.order.order_number) || '102';
+          const orderId = data.order_id || data.id || (data.order && data.order.id);
+
+          const checkoutEl = document.getElementById('checkout-container');
+          if (checkoutEl) checkoutEl.classList.add('hidden');
+
+          const successEl = document.getElementById('success-screen');
+          if (successEl) successEl.classList.remove('hidden');
+
+          const numEl = document.getElementById('success-order-num');
+          if (numEl) numEl.innerText = `#ORD-${orderNum}`;
+
+          const btnActive = document.getElementById('btn-tracking-active');
+          if (btnActive && orderId) {
+            btnActive.href = `http://localhost:3000/tracking/${orderId}`;
+          }
+        } else {
+          alert(`Inconveniente al procesar: ${data.message || data.error || 'Verifique los datos'}`);
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Confirmar y Despachar';
+        }
+      } catch (err) {
+        console.error('Submit order error:', err);
+        alert('Error de conexión con el servicio de despacho.');
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Confirmar y Despachar';
       }
     }
 
