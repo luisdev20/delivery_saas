@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSessionContext } from '@/lib/auth/session';
 import { notFound, redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import type { Restaurant, Order } from '@/lib/supabase/types';
 import PackingClient from './PackingClient';
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const supabase = await createClient();
   const { data: restaurant } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('name')
     .eq('slug', slug)
     .maybeSingle();
@@ -31,12 +31,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PackingPage({ params }: Props) {
   const { slug } = await params;
-  const cookieStore = await cookies();
-  const userRole = cookieStore.get('dtk_role')?.value;
-  const userTenant = cookieStore.get('dtk_tenant')?.value;
 
-  // Packing Security Guard: Requires packing session for this specific tenant (or superadmin)
-  if (!userRole || (userRole !== 'superadmin' && userRole !== 'packing' && userRole !== 'owner')) {
+  // Rol y comercio desde la sesión real (no de cookies del cliente)
+  const session = await getSessionContext();
+  if (!session.userId) redirect('/login');
+
+  const userRole = session.role ?? 'owner';
+  const userTenant = session.tenantSlug;
+
+  // Packing Security Guard: requires packing/owner/superadmin for the tenant
+  if (userRole !== 'superadmin' && userRole !== 'packing' && userRole !== 'owner') {
     redirect('/packing');
   }
   if (userRole !== 'superadmin' && userTenant && userTenant !== slug && userTenant !== 'all') {
@@ -46,7 +50,7 @@ export default async function PackingPage({ params }: Props) {
   const supabase = await createClient();
 
   const { data: restaurant } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('*')
     .eq('slug', slug)
     .maybeSingle();
@@ -56,8 +60,8 @@ export default async function PackingPage({ params }: Props) {
   // Cargar órdenes activas de empaque y preparación de este comercio
   const { data: initialOrders } = await supabase
     .from('orders')
-    .select('*, order_items(*)')
-    .eq('restaurant_id', restaurant.id)
+    .select('*')
+    .eq('tenant_id', restaurant.id)
     .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO'])
     .order('created_at', { ascending: true });
 

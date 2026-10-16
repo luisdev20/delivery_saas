@@ -13,7 +13,8 @@ import { PLAN_LIMITS } from '@/lib/supabase/types';
 
 interface OrderSummary {
   id: string;
-  restaurant_id: string;
+  tenant_id?: string;
+  restaurant_id?: string;
   status: string;
   total_amount: number;
   created_at: string;
@@ -225,7 +226,7 @@ export default function SuperAdminClient({
     const newStatus = !restaurant.is_open;
     try {
       const { error } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .update({ is_open: newStatus })
         .eq('id', restaurant.id);
 
@@ -251,10 +252,11 @@ export default function SuperAdminClient({
       const cleanSlug = newMerchantSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
       const radiusKm = parseFloat(newMerchantRadius) || 10;
 
-      // 1. Insert into restaurants with full schema
+      // 1. Insert into tenants with full schema
       const fullPayload = {
         name: newMerchantName.trim(),
         slug: cleanSlug,
+        phone: '988000000',
         address: newMerchantAddress.trim() || 'Lima, Perú',
         lat: newMerchantLat,
         lng: newMerchantLng,
@@ -263,34 +265,14 @@ export default function SuperAdminClient({
         is_open: true,
       };
 
-      const { data: created1, error: err1 } = await supabase
-        .from('restaurants')
+      const { data: createdRestaurant, error: err1 } = await supabase
+        .from('tenants')
         .insert(fullPayload)
         .select()
         .single();
 
-      let createdRestaurant: Restaurant | null = created1 as Restaurant | null;
-
       if (err1 || !createdRestaurant) {
-        // Fallback base compatible
-        const basePayload = {
-          name: newMerchantName.trim(),
-          slug: cleanSlug,
-          address: `${newMerchantAddress.trim()} [Lat: ${newMerchantLat}, Lng: ${newMerchantLng}, Radio: ${radiusKm}km]`,
-          brand_color: '#4F46E5',
-          is_open: true,
-        };
-
-        const { data: created2, error: err2 } = await supabase
-          .from('restaurants')
-          .insert(basePayload)
-          .select()
-          .single();
-
-        if (err2 || !created2) {
-          throw new Error(err2?.message || 'Error al crear el comercio');
-        }
-        createdRestaurant = created2 as Restaurant;
+        throw new Error(err1?.message || 'Error al crear el comercio');
       }
 
       // 2. Insert subscription
@@ -298,7 +280,7 @@ export default function SuperAdminClient({
       const { data: createdSub } = await supabase
         .from('subscriptions')
         .insert({
-          restaurant_id: createdRestaurant.id,
+          tenant_id: createdRestaurant.id,
           plan: newMerchantPlan,
           max_orders_per_month: planLimits.maxOrders,
           max_drivers: planLimits.maxDrivers,
@@ -334,7 +316,7 @@ export default function SuperAdminClient({
     setIsUpdatingPlan(true);
     try {
       const planConfig = PLAN_LIMITS[selectedPlanKey];
-      const existingSub = subscriptions.find(s => s.restaurant_id === selectedMerchantForPlan.id);
+      const existingSub = subscriptions.find(s => (s.tenant_id || s.restaurant_id) === selectedMerchantForPlan.id);
 
       if (existingSub) {
         const { error } = await supabase
@@ -352,7 +334,7 @@ export default function SuperAdminClient({
         const { data: newSub, error } = await supabase
           .from('subscriptions')
           .insert({
-            restaurant_id: selectedMerchantForPlan.id,
+            tenant_id: selectedMerchantForPlan.id,
             plan: selectedPlanKey,
             max_orders_per_month: planConfig.maxOrders,
             max_drivers: planConfig.maxDrivers,
@@ -523,8 +505,8 @@ export default function SuperAdminClient({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {restaurants.map(merchant => {
-                    const merchantOrders = orders.filter(o => o.restaurant_id === merchant.id);
-                    const sub = subscriptions.find(s => s.restaurant_id === merchant.id);
+                    const merchantOrders = orders.filter(o => (o.tenant_id || o.restaurant_id) === merchant.id);
+                    const sub = subscriptions.find(s => (s.tenant_id || s.restaurant_id) === merchant.id);
                     const planConfig = sub ? PLAN_LIMITS[sub.plan] : PLAN_LIMITS['GROWTH'];
 
                     return (

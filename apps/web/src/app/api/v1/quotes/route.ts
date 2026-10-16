@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let query = supabase.from('restaurants').select('*');
+    let query = supabase.from('tenants').select('*');
     if (targetRestaurantId) {
       query = query.eq('id', targetRestaurantId);
     } else {
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     if (!merchant && slug) {
       const normalized = slug.replace(/^el-/, '');
       const { data: fallback } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .select('*')
         .ilike('slug', `%${normalized}%`)
         .limit(1)
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     if (!merchant) {
       // If still not found, fallback to first available merchant for demo purposes
       const { data: fallback } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .select('*')
         .limit(1)
         .maybeSingle();

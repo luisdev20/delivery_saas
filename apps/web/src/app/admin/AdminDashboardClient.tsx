@@ -11,10 +11,11 @@ import {
   TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
   ShieldCheck, AlertTriangle, Boxes, PackageCheck, UserCheck,
   Send, ExternalLink, PlusCircle, HelpCircle, Sparkles,
+  Search, RotateCcw, SlidersHorizontal, Filter, KeyRound,
 } from 'lucide-react';
 import type {
   Order, Driver, Restaurant, OrderStatus, Subscription,
-  MerchantApiKey, CancellationReason, PaymentMethod,
+  MerchantApiKey, CancellationReason,
 } from '@/lib/supabase/types';
 import { PLAN_LIMITS, CANCELLATION_REASONS } from '@/lib/supabase/types';
 
@@ -23,6 +24,7 @@ interface Props {
   allRestaurants?: Restaurant[];
   drivers: Driver[];
   subscription: Subscription | null;
+  initialOrders?: Order[];
   userRole: string;
 }
 
@@ -63,8 +65,15 @@ function timeAgo(dateStr: string): string {
   return `Hace ${Math.floor(diff / 60)}h`;
 }
 
-export default function AdminDashboardClient({ restaurant, allRestaurants = [], drivers: initialDrivers, subscription, userRole }: Props) {
-  const [orders, setOrders] = useState<Order[]>([]);
+export default function AdminDashboardClient({
+  restaurant,
+  allRestaurants = [],
+  drivers: initialDrivers,
+  subscription,
+  initialOrders = [],
+  userRole,
+}: Props) {
+  const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
   const [apiKeys, setApiKeys] = useState<MerchantApiKey[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -74,6 +83,13 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trackingDrawerOrder, setTrackingDrawerOrder] = useState<Order | null>(null);
 
+  // Logistics Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDriver, setFilterDriver] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterOrigin, setFilterOrigin] = useState('all');
+  const [filterDate, setFilterDate] = useState('all');
+
   const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant>(restaurant);
   const [togglingOpen, setTogglingOpen] = useState(false);
 
@@ -81,7 +97,13 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [newDriverName, setNewDriverName] = useState('');
   const [newDriverPhone, setNewDriverPhone] = useState('');
+  const [newDriverPassword, setNewDriverPassword] = useState('');
   const [savingDriver, setSavingDriver] = useState(false);
+
+  // Reset de contraseña de repartidor
+  const [passwordModalDriver, setPasswordModalDriver] = useState<Driver | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
   // Manual Dispatch Modal
   const [showManualModal, setShowManualModal] = useState(false);
@@ -92,8 +114,6 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     delivery_reference: '',
     item_description: '',
     total_amount: '',
-    payment_method: 'PAGADO_ORIGEN' as PaymentMethod,
-    cash_amount_change: '',
     notes: '',
   });
   const [creatingManual, setCreatingManual] = useState(false);
@@ -120,11 +140,13 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
   // Metrics
   const [metricsRange, setMetricsRange] = useState<MetricsRange>('today');
   const [metricsOrders, setMetricsOrders] = useState<Order[]>([]);
+  const [driverHistoryOrders, setDriverHistoryOrders] = useState<Order[]>([]);
+  const [driverView, setDriverView] = useState<'total' | 'daily'>('total');
 
   const trackingMapRef = useRef<HTMLDivElement>(null);
   const trackingLeafletRef = useRef<unknown>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const toggleStoreStatus = async () => {
     const newStatus = !currentRestaurant.is_open;
@@ -132,7 +154,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     setCurrentRestaurant(prev => ({ ...prev, is_open: newStatus }));
     try {
       const { error } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .update({ is_open: newStatus })
         .eq('id', restaurant.id);
       if (error) throw error;
@@ -146,28 +168,39 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
   };
 
   const loadOrders = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('orders')
-      .select('*, driver:drivers(*), order_items(*)')
-      .eq('restaurant_id', restaurant.id)
+      .select('*, driver:drivers(*)')
+      .eq('tenant_id', restaurant.id)
       .order('created_at', { ascending: false })
       .limit(100);
-    if (data) setOrders(data as Order[]);
+    if (data) {
+      setOrders(data as Order[]);
+    } else if (error) {
+      console.warn('Retrying loading orders without driver join...', error);
+      const { data: fallbackOrders } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('tenant_id', restaurant.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (fallbackOrders) setOrders(fallbackOrders as Order[]);
+    }
   }, [restaurant.id, supabase]);
 
   const loadDrivers = useCallback(async () => {
     const { data } = await supabase
       .from('drivers')
       .select('*')
-      .eq('restaurant_id', restaurant.id);
+      .eq('tenant_id', restaurant.id);
     if (data) setDrivers(data as Driver[]);
   }, [restaurant.id, supabase]);
 
   const loadApiKeys = useCallback(async () => {
     const { data } = await supabase
-      .from('merchant_api_keys')
+      .from('tenant_api_keys')
       .select('*')
-      .eq('restaurant_id', restaurant.id)
+      .eq('tenant_id', restaurant.id)
       .order('created_at', { ascending: false });
     if (data) setApiKeys(data as MerchantApiKey[]);
   }, [restaurant.id, supabase]);
@@ -184,12 +217,12 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       .channel(`orders-${restaurant.id}`)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'orders',
-        filter: `restaurant_id=eq.${restaurant.id}`,
+        filter: `tenant_id=eq.${restaurant.id}`,
       }, async (payload) => {
         if (payload.eventType === 'INSERT') {
           const { data: newOrder } = await supabase
             .from('orders')
-            .select('*, driver:drivers(*), order_items(*)')
+            .select('*, driver:drivers(*)')
             .eq('id', payload.new.id)
             .single();
           if (newOrder) {
@@ -266,7 +299,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     } else if (order.status === 'EN_PREPARACION') {
       await updateOrderStatus(order.id, 'LISTO');
     } else if (order.status === 'LISTO') {
-      if (!order.driver_id && drivers.length > 0) {
+      if (!order.driver_id && drivers.some(d => !d.deleted_at)) {
         toast.info('Seleccione un repartidor para despachar el pedido');
         setSelectedOrder(order);
         return;
@@ -404,11 +437,12 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     const defaultLng = restaurant.lng || -77.0428;
 
     const totalAmount = parseFloat(manualForm.total_amount) || 0;
+    const itemDesc = manualForm.item_description.trim() || 'Paquete para despacho';
 
     const { data: newOrder, error: orderError } = await supabase
       .from('orders')
       .insert({
-        restaurant_id: restaurant.id,
+        tenant_id: restaurant.id,
         origin_system: 'MANUAL_DISPATCH',
         pin_code: pinCode,
         customer_name: manualForm.customer_name.trim(),
@@ -418,9 +452,8 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
         delivery_lat: defaultLat,
         delivery_lng: defaultLng,
         status: 'RECIBIDO',
-        payment_method: manualForm.payment_method,
-        cash_amount_change: manualForm.payment_method === 'EFECTIVO' && manualForm.cash_amount_change ? parseFloat(manualForm.cash_amount_change) : null,
         total_amount: totalAmount,
+        package_notes: itemDesc,
         notes: manualForm.notes.trim() || null,
       })
       .select()
@@ -432,15 +465,6 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       return;
     }
 
-    // Insert line item
-    const itemName = manualForm.item_description.trim() || 'Paquete para entrega';
-    await supabase.from('order_items').insert({
-      order_id: newOrder.id,
-      product_name: itemName,
-      quantity: 1,
-      unit_price: totalAmount,
-    });
-
     setOrders(prev => [newOrder as Order, ...prev]);
     toast.success(`Despacho #${newOrder.order_number} creado con éxito. PIN: ${pinCode}`);
     setShowManualModal(false);
@@ -451,8 +475,6 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       delivery_reference: '',
       item_description: '',
       total_amount: '',
-      payment_method: 'PAGADO_ORIGEN',
-      cash_amount_change: '',
       notes: '',
     });
     setCreatingManual(false);
@@ -463,6 +485,10 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     e.preventDefault();
     if (!newDriverName || !newDriverPhone) {
       toast.error('Nombre y teléfono son obligatorios');
+      return;
+    }
+    if (newDriverPassword.trim().length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres');
       return;
     }
     if (subscription) {
@@ -477,7 +503,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     const { data, error } = await supabase
       .from('drivers')
       .insert({
-        restaurant_id: restaurant.id,
+        tenant_id: restaurant.id,
         name: newDriverName,
         phone: newDriverPhone,
         is_active: true,
@@ -485,15 +511,29 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       .select()
       .single();
 
-    if (!error && data) {
-      setDrivers(prev => [...prev, data as Driver]);
-      toast.success(`Repartidor ${data.name} registrado`);
-      setShowDriverModal(false);
-      setNewDriverName('');
-      setNewDriverPhone('');
-    } else {
+    if (error || !data) {
       toast.error('Error al registrar repartidor');
+      setSavingDriver(false);
+      return;
     }
+
+    // Asignar su contraseña de acceso (se guarda hasheada en el servidor vía RPC)
+    const { data: pwData } = await supabase.rpc('set_driver_password', {
+      p_driver_id: data.id,
+      p_password: newDriverPassword.trim(),
+    });
+    const pwRes = (pwData || null) as { success?: boolean; error?: string } | null;
+
+    setDrivers(prev => [...prev, data as Driver]);
+    if (pwRes?.success) {
+      toast.success(`Repartidor ${data.name} registrado con su contraseña`);
+    } else {
+      toast.error(`Repartidor ${data.name} creado, pero no se pudo asignar la contraseña. Usa "Contraseña" para restablecerla.`);
+    }
+    setShowDriverModal(false);
+    setNewDriverName('');
+    setNewDriverPhone('');
+    setNewDriverPassword('');
     setSavingDriver(false);
   };
 
@@ -507,6 +547,46 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       setDrivers(prev => prev.map(d => d.id === driver.id ? { ...d, is_active: newVal } : d));
       toast.success(newVal ? `${driver.name} activado` : `${driver.name} desactivado`);
     }
+  };
+
+  const handleDeleteDriver = async (driver: Driver) => {
+    if (!confirm(`¿Dar de baja a "${driver.name}"?\n\nSe eliminarán su teléfono y su acceso de login. Su historial de entregas se conservará. Esta acción no se puede deshacer.`)) return;
+    const { data, error } = await supabase.rpc('soft_delete_driver', { p_driver_id: driver.id });
+    const res = (data || null) as { success?: boolean; error?: string; released_orders?: number } | null;
+    if (error || !res?.success) {
+      toast.error(res?.error || error?.message || 'No se pudo dar de baja al repartidor');
+      return;
+    }
+    setDrivers(prev => prev.filter(d => d.id !== driver.id));
+    const released = res.released_orders ?? 0;
+    toast.success(
+      released > 0
+        ? `${driver.name} dado de baja · ${released} pedido(s) en curso liberado(s)`
+        : `${driver.name} dado de baja`
+    );
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordModalDriver) return;
+    if (newPassword.trim().length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    setSavingPassword(true);
+    const { data, error } = await supabase.rpc('set_driver_password', {
+      p_driver_id: passwordModalDriver.id,
+      p_password: newPassword.trim(),
+    });
+    const res = (data || null) as { success?: boolean; error?: string } | null;
+    if (error || !res?.success) {
+      toast.error(res?.error || error?.message || 'No se pudo actualizar la contraseña');
+    } else {
+      toast.success(`Contraseña actualizada para ${passwordModalDriver.name}`);
+      setPasswordModalDriver(null);
+      setNewPassword('');
+    }
+    setSavingPassword(false);
   };
 
   // API Keys Management
@@ -537,7 +617,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
   const handleToggleApiKey = async (key: MerchantApiKey) => {
     const newVal = !key.is_active;
     const { error } = await supabase
-      .from('merchant_api_keys')
+      .from('tenant_api_keys')
       .update({ is_active: newVal })
       .eq('id', key.id);
     if (!error) {
@@ -548,7 +628,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
 
   const handleDeleteApiKey = async (key: MerchantApiKey) => {
     if (!confirm(`¿Eliminar la clave "${key.name}"? Los sistemas que usen este token ya no podrán despachar.`)) return;
-    const { error } = await supabase.from('merchant_api_keys').delete().eq('id', key.id);
+    const { error } = await supabase.from('tenant_api_keys').delete().eq('id', key.id);
     if (!error) {
       setApiKeys(prev => prev.filter(k => k.id !== key.id));
       toast.success('Clave API eliminada');
@@ -582,19 +662,32 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     }
     const { data } = await supabase
       .from('orders')
-      .select('*, driver:drivers(*), order_items(*)')
-      .eq('restaurant_id', restaurant.id)
+      .select('*, driver:drivers(*)')
+      .eq('tenant_id', restaurant.id)
       .gte('created_at', from)
       .lte('created_at', to)
       .order('created_at', { ascending: false });
     if (data) setMetricsOrders(data as Order[]);
   }, [restaurant.id, supabase]);
 
+  // Historial completo (todas las fechas) para los totales por repartidor.
+  // Se limita a las columnas necesarias para no traer todo el pedido.
+  const loadDriverHistory = useCallback(async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select('id, driver_id, status, created_at, delivered_at, total_amount')
+      .eq('tenant_id', restaurant.id)
+      .not('driver_id', 'is', null)
+      .order('created_at', { ascending: false });
+    if (data) setDriverHistoryOrders(data as Order[]);
+  }, [restaurant.id, supabase]);
+
   useEffect(() => {
     if (adminTab === 'metrics') {
       loadMetricsOrders(metricsRange);
+      loadDriverHistory();
     }
-  }, [adminTab, metricsRange, loadMetricsOrders]);
+  }, [adminTab, metricsRange, loadMetricsOrders, loadDriverHistory]);
 
   const metricsData = useMemo(() => {
     const delivered = metricsOrders.filter(o => o.status === 'ENTREGADO');
@@ -613,10 +706,14 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
       : 0;
 
     const paymentCounts: Record<string, number> = { EFECTIVO: 0, YAPE: 0, PLIN: 0, PAGADO_ORIGEN: 0 };
-    delivered.forEach(o => { paymentCounts[o.payment_method] = (paymentCounts[o.payment_method] || 0) + 1; });
+    delivered.forEach(o => {
+      if (o.payment_method) {
+        paymentCounts[o.payment_method] = (paymentCounts[o.payment_method] || 0) + 1;
+      }
+    });
     const paymentTotal = Object.values(paymentCounts).reduce((a, b) => a + b, 0) || 1;
 
-    const driverStats = drivers.map(d => {
+    const driverStats = drivers.filter(d => !d.deleted_at).map(d => {
       const driverOrders = delivered.filter(o => o.driver_id === d.id);
       const driverTimes = driverOrders
         .filter(o => o.delivered_at)
@@ -646,15 +743,150 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
     };
   }, [metricsOrders, drivers]);
 
-  const filteredOrders = orders.filter(o => {
-    if (activeFilter === 'active') return !['ENTREGADO', 'CANCELADO'].includes(o.status);
-    if (activeFilter === 'delivered') return o.status === 'ENTREGADO';
-    return true;
-  });
+  // Totales históricos por repartidor (todas las fechas)
+  const driverTotals = useMemo(() => {
+    type Acc = { assigned: number; delivered: number; cancelled: number; inProgress: number; revenue: number; times: number[] };
+    const byDriver = new Map<string, Acc>();
 
-  const activeCount  = orders.filter(o => !['ENTREGADO', 'CANCELADO'].includes(o.status)).length;
-  const enRutaCount  = orders.filter(o => o.status === 'EN_CAMINO').length;
-  const todayCount   = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length;
+    for (const o of driverHistoryOrders) {
+      if (!o.driver_id) continue;
+      const acc = byDriver.get(o.driver_id)
+        ?? { assigned: 0, delivered: 0, cancelled: 0, inProgress: 0, revenue: 0, times: [] };
+      acc.assigned += 1;
+      if (o.status === 'ENTREGADO') {
+        acc.delivered += 1;
+        acc.revenue += o.total_amount || 0;
+        if (o.delivered_at && o.created_at) {
+          const mins = (new Date(o.delivered_at).getTime() - new Date(o.created_at).getTime()) / 60000;
+          if (mins >= 0) acc.times.push(mins);
+        }
+      } else if (o.status === 'CANCELADO') {
+        acc.cancelled += 1;
+      } else {
+        acc.inProgress += 1;
+      }
+      byDriver.set(o.driver_id, acc);
+    }
+
+    return [...byDriver.entries()]
+      .map(([driverId, acc]) => {
+        const driver = drivers.find(d => d.id === driverId);
+        return {
+          driverId,
+          name: driver?.name ?? 'Repartidor',
+          isDeleted: Boolean(driver?.deleted_at),
+          assigned: acc.assigned,
+          delivered: acc.delivered,
+          cancelled: acc.cancelled,
+          inProgress: acc.inProgress,
+          revenue: acc.revenue,
+          avgTime: acc.times.length ? Math.round(acc.times.reduce((a, b) => a + b, 0) / acc.times.length) : 0,
+        };
+      })
+      .sort((a, b) => b.delivered - a.delivered || b.assigned - a.assigned);
+  }, [driverHistoryOrders, drivers]);
+
+  // Desglose diario (rango seleccionado): día -> repartidor -> entregados
+  const driverDaily = useMemo(() => {
+    const byDay = new Map<string, Map<string, number>>();
+    for (const o of metricsOrders) {
+      if (!o.driver_id || o.status !== 'ENTREGADO') continue;
+      const iso = o.delivered_at || o.created_at;
+      if (!iso) continue;
+      const day = iso.slice(0, 10);
+      const inner = byDay.get(day) ?? new Map<string, number>();
+      inner.set(o.driver_id, (inner.get(o.driver_id) ?? 0) + 1);
+      byDay.set(day, inner);
+    }
+    return { byDay, days: [...byDay.keys()].sort().reverse() };
+  }, [metricsOrders]);
+
+  // Columnas del desglose diario: solo repartidores con entregas en el rango
+  const driverDailyColumns = useMemo(() => {
+    const ids = new Set<string>();
+    for (const inner of driverDaily.byDay.values()) {
+      for (const id of inner.keys()) ids.add(id);
+    }
+    return driverTotals.filter(r => ids.has(r.driverId));
+  }, [driverDaily, driverTotals]);
+
+  const hasAdvancedFilters = Boolean(
+    searchTerm.trim() ||
+    filterDriver !== 'all' ||
+    filterStatus !== 'all' ||
+    filterOrigin !== 'all' ||
+    filterDate !== 'all'
+  );
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterDriver('all');
+    setFilterStatus('all');
+    setFilterOrigin('all');
+    setFilterDate('all');
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      // 1. Tab-level status filter
+      if (activeFilter === 'active' && ['ENTREGADO', 'CANCELADO'].includes(o.status)) return false;
+      if (activeFilter === 'delivered' && o.status !== 'ENTREGADO') return false;
+
+      // 2. Specific Sub-status filter
+      if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+
+      // 3. Driver assignment filter
+      if (filterDriver === 'unassigned' && o.driver_id) return false;
+      if (filterDriver !== 'all' && filterDriver !== 'unassigned' && o.driver_id !== filterDriver) return false;
+
+      // 4. Origin / Channel filter (API vs Manual Dispatch)
+      const isManual = o.origin_system === 'MANUAL_DISPATCH' || o.notes?.toLowerCase().includes('despacho manual');
+      if (filterOrigin === 'API' && isManual) return false;
+      if (filterOrigin === 'MANUAL' && !isManual) return false;
+
+      // 5. Date filter
+      if (filterDate !== 'all') {
+        const orderDate = new Date(o.created_at);
+        const now = new Date();
+        if (filterDate === 'today') {
+          if (orderDate.toDateString() !== now.toDateString()) return false;
+        } else if (filterDate === 'yesterday') {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (orderDate.toDateString() !== yesterday.toDateString()) return false;
+        } else if (filterDate === '7days') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (orderDate < sevenDaysAgo) return false;
+        } else if (filterDate === 'month') {
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (orderDate < thirtyDaysAgo) return false;
+        }
+      }
+
+      // 6. Universal Search Term
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const matchesOrderNum = `#${o.order_number}`.includes(q) || String(o.order_number).includes(q);
+        const matchesPin = o.pin_code?.toLowerCase().includes(q);
+        const matchesCustomer = o.customer_name?.toLowerCase().includes(q);
+        const matchesPhone = o.customer_phone?.toLowerCase().includes(q);
+        const matchesAddress = o.delivery_address?.toLowerCase().includes(q);
+        const matchesRef = o.delivery_reference?.toLowerCase().includes(q);
+        const matchesExtId = o.external_order_id?.toLowerCase().includes(q);
+        if (!matchesOrderNum && !matchesPin && !matchesCustomer && !matchesPhone && !matchesAddress && !matchesRef && !matchesExtId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, activeFilter, filterStatus, filterDriver, filterOrigin, filterDate, searchTerm]);
+
+  const activeCount    = orders.filter(o => !['ENTREGADO', 'CANCELADO'].includes(o.status)).length;
+  const deliveredCount = orders.filter(o => o.status === 'ENTREGADO').length;
+  const allCount       = orders.length;
+  const enRutaCount    = orders.filter(o => o.status === 'EN_CAMINO').length;
+  const todayCount     = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -905,33 +1137,148 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
 
             {/* Orders Table Container */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              {/* Filter Tabs */}
-              <div className="flex border-b border-slate-200 p-2 gap-2 overflow-x-auto bg-slate-50/50">
-                {([['active', 'Activos', activeCount], ['delivered', 'Entregados', null], ['all', 'Todos', null]] as const).map(([tab, label, count]) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveFilter(tab)}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 ${
-                      activeFilter === tab
-                        ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
+              {/* Filter Tabs & Quick Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 p-2 gap-2 bg-slate-50/50">
+                <div className="flex gap-1 overflow-x-auto">
+                  {([['active', 'Activos', activeCount], ['delivered', 'Entregados', deliveredCount], ['all', 'Todos', allCount]] as const).map(([tab, label, count]) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveFilter(tab)}
+                      className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+                        activeFilter === tab
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {label}
+                      {count != null && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeFilter === tab ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {hasAdvancedFilters && (
+                  <div className="flex items-center gap-2 px-2 text-xs text-slate-500">
+                    <span>Filtrando <strong>{filteredOrders.length}</strong> de <strong>{orders.length}</strong></span>
+                    <button
+                      onClick={handleResetFilters}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold underline text-xs ml-1"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Logistics Filters Toolbar */}
+              <div className="p-3 sm:p-3.5 bg-slate-50/70 border-b border-slate-200 flex flex-col xl:flex-row gap-2.5 items-stretch xl:items-center justify-between">
+                {/* Search Bar */}
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por #orden, PIN, cliente, tel, dir o ID externo..."
+                    className="w-full pl-9 pr-8 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-2xs"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Selectors */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Motorizado */}
+                  <select
+                    value={filterDriver}
+                    onChange={(e) => setFilterDriver(e.target.value)}
+                    className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-2xs"
                   >
-                    {label}
-                    {count != null && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeFilter === tab ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-                        {count}
-                      </span>
+                    <option value="all">Motorizado: Todos</option>
+                    <option value="unassigned">Sin asignar</option>
+                    {drivers.filter(d => !d.deleted_at).map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.is_active ? '' : '(Inactivo)'}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Estado (contextual) */}
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="all">Estado: Todos</option>
+                    {activeFilter !== 'delivered' && (
+                      <>
+                        <option value="RECIBIDO">Recibido</option>
+                        <option value="EN_PREPARACION">En preparación</option>
+                        <option value="LISTO">Listo para despacho</option>
+                        <option value="EN_CAMINO">En camino</option>
+                      </>
                     )}
-                  </button>
-                ))}
+                    {activeFilter !== 'active' && (
+                      <>
+                        <option value="ENTREGADO">Entregado</option>
+                        <option value="CANCELADO">Cancelado</option>
+                      </>
+                    )}
+                  </select>
+
+                  {/* Fecha */}
+                  <select
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="all">Fecha: Todas</option>
+                    <option value="today">Hoy</option>
+                    <option value="yesterday">Ayer</option>
+                    <option value="7days">Últimos 7 días</option>
+                    <option value="month">Últimos 30 días</option>
+                  </select>
+
+                  {/* Canal / Origen */}
+                  <select
+                    value={filterOrigin}
+                    onChange={(e) => setFilterOrigin(e.target.value)}
+                    className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="all">Canal: Todos</option>
+                    <option value="API">API B2B</option>
+                    <option value="MANUAL">Despacho Manual</option>
+                  </select>
+                </div>
               </div>
 
               {filteredOrders.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">
-                  <Package size={36} className="mx-auto mb-2 opacity-50" />
-                  <p className="text-sm font-medium">No hay órdenes en esta categoría</p>
-                  <p className="text-xs text-slate-400 mt-1">Crea un despacho manual o conecta tu sistema vía API</p>
+                <div className="p-10 text-center text-slate-400">
+                  <Package size={36} className="mx-auto mb-2 opacity-50 text-slate-400" />
+                  <p className="text-sm font-semibold text-slate-600">
+                    {hasAdvancedFilters ? 'No se encontraron despachos con los filtros aplicados' : 'No hay órdenes en esta categoría'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {hasAdvancedFilters ? 'Prueba ajustando los criterios de búsqueda o fecha' : 'Crea un despacho manual o conecta tu sistema vía API'}
+                  </p>
+                  {hasAdvancedFilters && (
+                    <button
+                      onClick={handleResetFilters}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                    >
+                      <RotateCcw size={12} />
+                      Restablecer todos los filtros
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1147,7 +1494,7 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {drivers.map(driver => (
+              {drivers.filter(d => !d.deleted_at).map(driver => (
                 <div key={driver.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -1166,10 +1513,10 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
                     </span>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
                     <button
                       onClick={() => handleToggleDriver(driver)}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                      className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
                         driver.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                       }`}
                     >
@@ -1179,10 +1526,25 @@ export default function AdminDashboardClient({ restaurant, allRestaurants = [], 
                       href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-emerald-600 font-semibold flex items-center gap-1 hover:underline"
+                      title="Escribir por WhatsApp"
+                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-1"
                     >
                       <MessageSquare size={13} /> WhatsApp
                     </a>
+                    <button
+                      onClick={() => { setPasswordModalDriver(driver); setNewPassword(''); }}
+                      title="Asignar / restablecer la contraseña de acceso del repartidor"
+                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <KeyRound size={13} /> Contraseña
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDriver(driver)}
+                      title="Dar de baja (elimina su acceso y conserva su historial de entregas)"
+                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Trash2 size={13} /> Baja
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1435,6 +1797,111 @@ print(response.json())`}</pre>
               ))}
             </div>
 
+            {/* Pedidos por Repartidor: totales históricos y desglose por día */}
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-700">Pedidos por Repartidor</h3>
+                  <p className="text-xs text-slate-400">
+                    {driverView === 'total'
+                      ? 'Totales históricos (todas las fechas)'
+                      : 'Entregados por día · según el rango seleccionado arriba'}
+                  </p>
+                </div>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg self-start">
+                  {([['total', 'Total'], ['daily', 'Por día']] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setDriverView(key)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                        driverView === key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {driverView === 'total' ? (
+                driverTotals.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-6 text-center">Aún no hay pedidos asignados a repartidores.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                          <th className="py-2 pr-3 font-semibold">Repartidor</th>
+                          <th className="py-2 px-3 font-semibold text-right">Entregados</th>
+                          <th className="py-2 px-3 font-semibold text-right">Asignados</th>
+                          <th className="py-2 px-3 font-semibold text-right">Cancelados</th>
+                          <th className="py-2 px-3 font-semibold text-right">En curso</th>
+                          <th className="py-2 px-3 font-semibold text-right">Tiempo prom.</th>
+                          <th className="py-2 pl-3 font-semibold text-right">Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {driverTotals.map(row => (
+                          <tr key={row.driverId} className="border-b border-slate-50 last:border-0">
+                            <td className="py-2.5 pr-3 whitespace-nowrap">
+                              <span className="font-semibold text-slate-700">{row.name}</span>
+                              {row.isDeleted && <span className="ml-2 text-[10px] font-bold text-slate-400">(Baja)</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-emerald-600">{row.delivered}</td>
+                            <td className="py-2.5 px-3 text-right text-slate-600">{row.assigned}</td>
+                            <td className="py-2.5 px-3 text-right text-red-500">{row.cancelled}</td>
+                            <td className="py-2.5 px-3 text-right text-amber-600">{row.inProgress}</td>
+                            <td className="py-2.5 px-3 text-right text-slate-500">{row.avgTime} min</td>
+                            <td className="py-2.5 pl-3 text-right text-slate-700">S/ {row.revenue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                driverDaily.days.length === 0 || driverDailyColumns.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-6 text-center">Sin entregas registradas en el rango seleccionado.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                          <th className="py-2 pr-3 font-semibold">Día</th>
+                          {driverDailyColumns.map(r => (
+                            <th key={r.driverId} className="py-2 px-3 font-semibold text-right whitespace-nowrap">
+                              {r.name.split(' ')[0]}
+                            </th>
+                          ))}
+                          <th className="py-2 pl-3 font-semibold text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {driverDaily.days.map(day => {
+                          const inner = driverDaily.byDay.get(day)!;
+                          const dayTotal = [...inner.values()].reduce((a, b) => a + b, 0);
+                          return (
+                            <tr key={day} className="border-b border-slate-50 last:border-0">
+                              <td className="py-2.5 pr-3 text-slate-600 whitespace-nowrap capitalize">
+                                {new Date(`${day}T00:00:00`).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })}
+                              </td>
+                              {driverDailyColumns.map(r => {
+                                const value = inner.get(r.driverId) ?? 0;
+                                return (
+                                  <td key={r.driverId} className={`py-2.5 px-3 text-right ${value > 0 ? 'font-semibold text-slate-700' : 'text-slate-300'}`}>
+                                    {value}
+                                  </td>
+                                );
+                              })}
+                              <td className="py-2.5 pl-3 text-right font-bold text-indigo-600">{dayTotal}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
+            </div>
+
             {/* Driver performance & Plan summary */}
             {subscription && (
               <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
@@ -1558,27 +2025,23 @@ print(response.json())`}</pre>
               </div>
 
               <div className="form-group">
-                <label className="form-label text-xs font-semibold uppercase">Descripción del Paquete</label>
+                <label className="form-label text-xs font-semibold uppercase">Descripción del Paquete / Encomienda</label>
                 <input
                   className="form-input"
-                  placeholder="Ej. 1x Zapatillas Talla 42 / Medicamentos"
+                  placeholder="Ej. Paquete de libros / Documentos / Caja sellada"
                   value={manualForm.item_description}
                   onChange={e => setManualForm(f => ({ ...f, item_description: e.target.value }))}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label text-xs font-semibold uppercase">Método de Pago</label>
-                <select
-                  className="form-input form-select"
-                  value={manualForm.payment_method}
-                  onChange={e => setManualForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
-                >
-                  <option value="PAGADO_ORIGEN">Pagado en Origen (No cobrar)</option>
-                  <option value="EFECTIVO">Efectivo contraentrega</option>
-                  <option value="YAPE">Yape contraentrega</option>
-                  <option value="PLIN">Plin contraentrega</option>
-                </select>
+                <label className="form-label text-xs font-semibold uppercase">Instrucciones de Despacho (Opcional)</label>
+                <input
+                  className="form-input"
+                  placeholder="Ej. Tocar timbre 4B, llamar antes de llegar"
+                  value={manualForm.notes}
+                  onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))}
+                />
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-slate-100">
@@ -1826,6 +2289,21 @@ print(response.json())`}</pre>
                   required
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">Contraseña de acceso</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Mínimo 6 caracteres"
+                  value={newDriverPassword}
+                  onChange={e => setNewDriverPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  El repartidor ingresa con su teléfono y esta contraseña en la app.
+                </p>
+              </div>
               <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -1840,6 +2318,54 @@ print(response.json())`}</pre>
                   className="btn btn-indigo flex-1 text-xs sm:text-sm"
                 >
                   {savingDriver ? 'Guardando...' : 'Registrar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: RESTABLECER CONTRASEÑA ================= */}
+      {passwordModalDriver && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800">Contraseña de {passwordModalDriver.name}</h3>
+              <button onClick={() => setPasswordModalDriver(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleResetPassword} className="space-y-3 sm:space-y-4">
+              <div className="form-group">
+                <label className="form-label">Nueva contraseña</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Mínimo 6 caracteres"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  minLength={6}
+                  required
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Se guarda cifrada. El repartidor la usará junto a su teléfono {passwordModalDriver.phone || '(sin teléfono)'} en la app.
+                </p>
+              </div>
+              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalDriver(null)}
+                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPassword}
+                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
+                >
+                  {savingPassword ? 'Guardando...' : 'Guardar contraseña'}
                 </button>
               </div>
             </form>
@@ -1895,6 +2421,11 @@ print(response.json())`}</pre>
                 {selectedOrder.cancellation_reason && (
                   <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
                     <strong>Motivo de Cancelación:</strong> {selectedOrder.cancellation_reason}
+                    {selectedOrder.cancelled_by && (
+                      <span className="block mt-1 text-[10px] font-semibold text-red-600 uppercase tracking-wide">
+                        Cancelado por: {selectedOrder.cancelled_by}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -1923,18 +2454,19 @@ print(response.json())`}</pre>
                 <div className="space-y-3">
                   <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Asignar Repartidor</h4>
                   <div className="grid grid-cols-1 gap-2">
-                    {drivers.map(d => (
+                    {drivers.filter(d => !d.deleted_at).map(d => (
                       <button
                         key={d.id}
                         onClick={() => assignDriver(selectedOrder.id, d.id)}
-                        className={`p-3 rounded-lg border text-left transition-all flex justify-between items-center ${
+                        disabled={!d.is_active}
+                        className={`p-3 rounded-lg border text-left transition-all flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed ${
                           selectedOrder.driver_id === d.id
                             ? 'border-indigo-600 bg-indigo-50 font-semibold'
                             : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                       >
                         <div>
-                          <p className="text-sm text-slate-800">{d.name}</p>
+                          <p className="text-sm text-slate-800">{d.name}{!d.is_active && <span className="text-[10px] font-bold text-slate-400"> (Inactivo)</span>}</p>
                           <p className="text-xs text-slate-400">{d.phone}</p>
                         </div>
                         {selectedOrder.driver_id === d.id && (

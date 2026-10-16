@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSessionContext } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import SuperAdminClient from './SuperAdminClient';
 import type { Restaurant, Subscription } from '@/lib/supabase/types';
@@ -14,20 +14,18 @@ export const metadata: Metadata = {
 };
 
 export default async function SuperAdminPage() {
-  const cookieStore = await cookies();
-  const userRole = cookieStore.get('dtk_role')?.value;
-  const userTenant = cookieStore.get('dtk_tenant')?.value;
+  const session = await getSessionContext();
 
   // Strict RBAC: Solo superadmin puede ver esta página
-  if (userRole !== 'superadmin') {
-    redirect(userTenant ? `/admin/${userTenant}` : '/login');
+  if (session.role !== 'superadmin') {
+    redirect(session.tenantSlug ? `/admin/${session.tenantSlug}` : '/login');
   }
 
   const supabase = await createClient();
 
   // Cargar todos los comercios
   const { data: restaurants } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('*')
     .order('created_at', { ascending: false });
 
@@ -39,7 +37,7 @@ export default async function SuperAdminPage() {
   // Cargar métricas globales de órdenes
   const { data: orders } = await supabase
     .from('orders')
-    .select('id, restaurant_id, status, total_amount, created_at');
+    .select('id, tenant_id, status, total_amount, created_at');
 
   return (
     <SuperAdminClient

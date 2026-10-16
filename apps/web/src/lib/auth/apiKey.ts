@@ -31,12 +31,25 @@ export async function authenticateApiKey(req: Request): Promise<{ restaurantId: 
     return { restaurantId: '00000000-0000-0000-0000-000000000001', keyId: 'demo-restaurante' };
   }
 
-  const { data: keyRecord, error } = await supabase
-    .from('merchant_api_keys')
-    .select('id, restaurant_id, is_active')
+  let { data: keyRecord, error } = await supabase
+    .from('tenant_api_keys')
+    .select('id, tenant_id, is_active')
     .eq('key_hash', keyHash)
     .eq('is_active', true)
     .maybeSingle();
+
+  if (!keyRecord) {
+    const { data: legacyKey } = await supabase
+      .from('merchant_api_keys')
+      .select('id, restaurant_id, is_active')
+      .eq('key_hash', keyHash)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (legacyKey) {
+      keyRecord = { id: legacyKey.id, tenant_id: legacyKey.restaurant_id, is_active: legacyKey.is_active };
+    }
+  }
 
   if (error || !keyRecord) {
     return null;
@@ -44,12 +57,12 @@ export async function authenticateApiKey(req: Request): Promise<{ restaurantId: 
 
   // Update last_used_at timestamp in background
   supabase
-    .from('merchant_api_keys')
+    .from('tenant_api_keys')
     .update({ last_used_at: new Date().toISOString() })
     .eq('id', keyRecord.id)
     .then();
 
-  return { restaurantId: keyRecord.restaurant_id, keyId: keyRecord.id };
+  return { restaurantId: keyRecord.tenant_id, keyId: keyRecord.id };
 }
 
 // Generate a secure API key with prefix

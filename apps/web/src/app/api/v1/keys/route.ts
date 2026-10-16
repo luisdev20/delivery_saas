@@ -11,8 +11,8 @@ export async function GET() {
   }
 
   const { data: restUser } = await supabase
-    .from('restaurant_users')
-    .select('restaurant_id')
+    .from('tenant_users')
+    .select('tenant_id')
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -21,9 +21,9 @@ export async function GET() {
   }
 
   const { data: keys, error } = await supabase
-    .from('merchant_api_keys')
+    .from('tenant_api_keys')
     .select('id, name, key_prefix, is_active, last_used_at, created_at')
-    .eq('restaurant_id', restUser.restaurant_id)
+    .eq('tenant_id', restUser.tenant_id)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -42,8 +42,8 @@ export async function POST(req: Request) {
   }
 
   const { data: restUser } = await supabase
-    .from('restaurant_users')
-    .select('restaurant_id')
+    .from('tenant_users')
+    .select('tenant_id')
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -58,9 +58,9 @@ export async function POST(req: Request) {
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
 
     const { data: keyRecord, error } = await supabase
-      .from('merchant_api_keys')
+      .from('tenant_api_keys')
       .insert({
-        restaurant_id: restUser.restaurant_id,
+        tenant_id: restUser.tenant_id,
         name: keyName,
         key_hash: keyHash,
         key_prefix: keyPrefix,

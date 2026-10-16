@@ -179,9 +179,9 @@ export default function OnboardingClient() {
     const supabase = createClient();
 
     try {
-      // 1. Crear restaurante
+      // 1. Crear comercio / tenant
       const { data: newRestaurant, error: restError } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .insert({
           name: form.name,
           slug: form.slug,
@@ -193,17 +193,16 @@ export default function OnboardingClient() {
           brand_color: form.brand_color,
           logo_url: form.logo_url || null,
           cover_image_url: form.cover_image_url || null,
-          business_hours: form.business_hours,
-          is_open: false,
+          is_open: true,
         })
         .select()
         .single();
 
       if (restError || !newRestaurant) {
         if (restError?.message?.includes('duplicate')) {
-          toast.error('Ya existe un restaurante con ese slug. Cambie el nombre o slug.');
+          toast.error('Ya existe un comercio con ese slug. Cambie el nombre o slug.');
         } else {
-          toast.error(`Error al crear restaurante: ${restError?.message || 'desconocido'}`);
+          toast.error(`Error al registrar comercio: ${restError?.message || 'desconocido'}`);
         }
         throw restError;
       }
@@ -216,17 +215,17 @@ export default function OnboardingClient() {
 
       if (authError || !authData.user) {
         toast.error(`Error al crear usuario: ${authError?.message || 'desconocido'}`);
-        // Rollback: eliminar restaurante creado
-        await supabase.from('restaurants').delete().eq('id', newRestaurant.id);
+        // Rollback: eliminar tenant creado
+        await supabase.from('tenants').delete().eq('id', newRestaurant.id);
         throw authError;
       }
 
-      // 3. Vincular usuario con restaurante
+      // 3. Vincular usuario con tenant
       const { error: linkError } = await supabase
-        .from('restaurant_users')
+        .from('tenant_users')
         .insert({
           user_id: authData.user.id,
-          restaurant_id: newRestaurant.id,
+          tenant_id: newRestaurant.id,
           role: 'owner',
         });
 
@@ -240,7 +239,7 @@ export default function OnboardingClient() {
       const { error: subError } = await supabase
         .from('subscriptions')
         .insert({
-          restaurant_id: newRestaurant.id,
+          tenant_id: newRestaurant.id,
           plan: form.plan,
           max_drivers: planLimits.maxDrivers,
           max_orders_per_month: planLimits.maxOrders,
@@ -253,26 +252,8 @@ export default function OnboardingClient() {
         throw subError;
       }
 
-      // 5. Crear productos de ejemplo
-      const sampleProducts = [
-        { name: 'Plato del Día', category: 'Menú del Día', price: 12.00, description: 'Plato principal con guarnición y refresco', sort_order: 0 },
-        { name: 'Lomo Saltado', category: 'A la Carta', price: 18.00, description: 'Lomo de res salteado con tomate, cebolla y papas fritas', sort_order: 1 },
-        { name: 'Arroz con Pollo', category: 'A la Carta', price: 15.00, description: 'Arroz verde con presa de pollo', sort_order: 2 },
-        { name: 'Chicha Morada', category: 'Bebidas', price: 4.00, description: 'Vaso de chicha morada natural', sort_order: 3 },
-        { name: 'Agua Mineral', category: 'Bebidas', price: 2.50, description: 'Botella personal 500ml', sort_order: 4 },
-      ];
-
-      await supabase.from('products').insert(
-        sampleProducts.map(p => ({
-          ...p,
-          restaurant_id: newRestaurant.id,
-          is_available: true,
-          available_days: [1, 2, 3, 4, 5, 6, 7],
-        }))
-      );
-
       setCreatedSlug(form.slug);
-      toast.success(`Restaurante "${form.name}" creado exitosamente`);
+      toast.success(`Comercio "${form.name}" creado exitosamente`);
     } catch {
       // Errors already toasted above
     } finally {

@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSessionContext } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import Link from 'next/link';
+import LogoutButton from '@/components/LogoutButton';
 import {
-  Store, Boxes, ArrowRight, ShieldCheck, Plus, LogOut,
+  Store, Boxes, ArrowRight, ShieldCheck, Plus,
   Truck, ExternalLink, Sparkles, MapPin, Phone,
 } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -22,12 +23,11 @@ interface Props {
 }
 
 export default async function AdminHubPage({ searchParams }: Props) {
-  const cookieStore = await cookies();
-  const userRole = cookieStore.get('dtk_role')?.value;
-  const userTenant = cookieStore.get('dtk_tenant')?.value;
+  // El rol y el comercio salen de la sesión real (no de cookies del cliente)
+  const session = await getSessionContext();
 
-  if (userRole === 'packing') {
-    redirect(`/packing/${userTenant || 'fuego-carbon'}`);
+  if (session.role === 'packing') {
+    redirect(`/packing/${session.tenantSlug || 'fuego-carbon'}`);
   }
 
   const { merchant } = await searchParams;
@@ -35,25 +35,17 @@ export default async function AdminHubPage({ searchParams }: Props) {
     redirect(`/admin/${merchant}`);
   }
 
+  if (!session.userId) redirect('/login');
+
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user && !userTenant) redirect('/login');
-
-  // Cargar vinculación usuario-restaurante si hay sesión Supabase
-  let restaurantUser = null;
-  if (user) {
-    const { data } = await supabase
-      .from('restaurant_users')
-      .select('restaurant_id, role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    restaurantUser = data;
-  }
+  const restaurantUser = session.tenantId
+    ? { restaurant_id: session.tenantId, role: session.role }
+    : null;
 
   // Cargar todos los comercios
   const { data: restaurants } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('*')
     .order('created_at', { ascending: true });
 
@@ -95,13 +87,10 @@ export default async function AdminHubPage({ searchParams }: Props) {
             <ShieldCheck size={14} />
             <span>SuperAdmin Console</span>
           </Link>
-          <Link
-            href="/login"
+          <LogoutButton
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors text-xs flex items-center gap-1.5"
             title="Cerrar Sesión"
-          >
-            <LogOut size={16} />
-          </Link>
+          />
         </div>
       </header>
 

@@ -2,8 +2,15 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { Order, DriverLocation, Restaurant } from '@/lib/supabase/types';
-import { MapPin, Package, Truck, CheckCircle, Clock, Phone, ShieldCheck, Bell } from 'lucide-react';
+import { MapPin, Package, Truck, CheckCircle, Clock, Phone, ShieldCheck, Bell, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  CUSTOMER_CANCELLATION_REASONS,
+  REQUIRES_DETAIL,
+  type Order,
+  type DriverLocation,
+  type Restaurant,
+  type CustomerCancellationReason,
+} from '@/lib/supabase/types';
 
 interface Props {
   order: Order;
@@ -80,6 +87,63 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
     : null;
 
   const isNearby = currentOrder.status === 'EN_CAMINO' && distanceMeters !== null && distanceMeters <= 350;
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelCode, setCancelCode] = useState<CustomerCancellationReason | ''>('');
+  const [cancelNote, setCancelNote] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const isFinal = currentOrder.status === 'CANCELADO';
+  const isDelivered = currentOrder.status === 'ENTREGADO';
+  const requiresDetail = cancelCode !== '' && REQUIRES_DETAIL.includes(cancelCode);
+  const canConfirmCancel = cancelCode !== '' && (!requiresDetail || cancelNote.trim().length > 0) && !cancelling;
+
+  const submitCancellation = async () => {
+    if (!canConfirmCancel) return;
+    setCancelling(true);
+    try {
+      const { data, error } = await supabase.rpc('cancel_order', {
+        p_order_id: currentOrder.id,
+        p_source: 'CLIENTE',
+        p_reason_code: cancelCode,
+        p_notes: cancelNote.trim() || null,
+      });
+      if (error) throw error;
+
+      const result = (data ?? {}) as { success?: boolean; outcome?: string; reason?: string; error?: string };
+      if (!result.success) {
+        setBanner({ kind: 'err', text: result.error || 'No se pudo procesar la solicitud.' });
+        return;
+      }
+
+      setCancelOpen(false);
+      if (result.outcome === 'RECLAMO') {
+        setCurrentOrder((prev: Order) => ({ ...prev, claim_reason: result.reason ?? null, claimed_at: new Date().toISOString() }));
+        setBanner({ kind: 'ok', text: 'Registramos tu reclamo. La tienda se contactará contigo para solucionarlo.' });
+      } else {
+        setCurrentOrder((prev: Order) => ({
+          ...prev,
+          status: 'CANCELADO',
+          cancellation_reason: result.reason ?? null,
+          cancelled_by: 'CLIENTE',
+          cancelled_at: new Date().toISOString(),
+        }));
+        if (driverMarkerRef.current) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (driverMarkerRef.current as any).remove();
+          driverMarkerRef.current = null;
+        }
+        setBanner({ kind: 'ok', text: 'Tu pedido fue cancelado. Contacta a la tienda para solucionar el problema.' });
+      }
+      setCancelCode('');
+      setCancelNote('');
+    } catch {
+      setBanner({ kind: 'err', text: 'Error de conexión al procesar la cancelación.' });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   useEffect(() => {
     if (isNearby && !hasChimedRef.current) {
@@ -339,6 +403,20 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
           </div>
         )}
 
+        {banner && (
+          <div className="absolute top-4 left-4 right-4 z-[600] max-w-lg mx-auto">
+            <div className={`p-3.5 rounded-2xl shadow-2xl flex items-start gap-3 border-2 ${banner.kind === 'ok' ? 'bg-emerald-700 border-emerald-400 text-white' : 'bg-rose-700 border-rose-400 text-white'}`}>
+              {banner.kind === 'ok'
+                ? <CheckCircle size={20} className="flex-shrink-0 mt-0.5" />
+                : <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />}
+              <p className="text-xs font-semibold leading-snug flex-1">{banner.text}</p>
+              <button type="button" onClick={() => setBanner(null)} className="opacity-80 hover:opacity-100" aria-label="Cerrar aviso">
+                <XCircle size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {currentOrder.status === 'ENTREGADO' && (
           <div
             className="absolute inset-0 flex items-center justify-center p-4 z-[500]"
@@ -363,6 +441,42 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
                   className="btn btn-primary btn-full text-white font-bold py-3 text-sm shadow-md hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
                   style={{ background: restaurant.brand_color }}
                   id="btn-contact-merchant"
+                >
+                  <Phone size={16} />
+                  <span>Contactar a {restaurant.name}</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentOrder.status === 'CANCELADO' && (
+          <div
+            className="absolute inset-0 flex items-center justify-center p-4 z-[500]"
+            style={{ background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(8px)' }}
+          >
+            <div className="bg-white p-7 text-center max-w-sm w-full rounded-2xl shadow-2xl animate-fade-in border border-slate-100">
+              <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-4 border-2 border-rose-500">
+                <XCircle size={36} className="text-rose-600" />
+              </div>
+              <span className="text-[11px] font-black text-rose-800 uppercase tracking-widest bg-rose-50 border border-rose-200 px-3 py-1 rounded-full inline-block mb-3">
+                Pedido Cancelado
+              </span>
+              <h2 className="font-black text-2xl text-slate-900 mb-2">
+                Pedido cancelado
+              </h2>
+              <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                Tu orden <strong className="text-slate-900 font-bold">#ORD-{order.order_number}</strong> de <strong className="text-slate-900 font-bold">{restaurant.name}</strong> fue cancelada. Para solucionar el problema, <strong className="text-slate-900 font-bold">contacta a la tienda</strong>.
+              </p>
+              {currentOrder.cancellation_reason && (
+                <p className="text-[11px] text-slate-500 mb-5 italic">Motivo: {currentOrder.cancellation_reason}</p>
+              )}
+              <div>
+                <a
+                  href={`tel:${restaurant.phone}`}
+                  className="btn btn-primary btn-full text-white font-bold py-3 text-sm shadow-md hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
+                  style={{ background: restaurant.brand_color }}
+                  id="btn-contact-merchant-cancelled"
                 >
                   <Phone size={16} />
                   <span>Contactar a {restaurant.name}</span>
@@ -408,8 +522,20 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
             })}
           </div>
 
-          {/* PIN Card for Delivery (or Delivery Finished Banner) */}
-          {currentOrder.status === 'ENTREGADO' ? (
+          {/* PIN Card for Delivery (or status banners) */}
+          {currentOrder.status === 'CANCELADO' ? (
+            <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50 flex items-center gap-3">
+              <XCircle className="text-rose-600 flex-shrink-0" size={22} />
+              <div>
+                <span className="text-xs font-black text-rose-900 tracking-wider uppercase block">
+                  Pedido cancelado
+                </span>
+                <p className="text-[11px] text-rose-700 leading-tight mt-0.5">
+                  {currentOrder.cancellation_reason || 'La orden fue cancelada. Contacta a la tienda para solucionarlo.'}
+                </p>
+              </div>
+            </div>
+          ) : currentOrder.status === 'ENTREGADO' ? (
             <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50 flex items-center gap-3">
               <CheckCircle className="text-emerald-600 flex-shrink-0" size={22} />
               <div>
@@ -457,7 +583,7 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
             </span>
           </div>
 
-          {/* Action button */}
+          {/* Action buttons */}
           <a
             href={`tel:${restaurant.phone}`}
             className="btn btn-secondary btn-full flex items-center justify-center gap-2 font-bold"
@@ -465,8 +591,98 @@ export default function TrackingClient({ order, restaurant, initialDriverLocatio
           >
             <Phone size={16} /> Contactar a {restaurant.name}
           </a>
+
+          {!isFinal && (
+            <button
+              type="button"
+              onClick={() => { setBanner(null); setCancelOpen(true); }}
+              id="btn-cancel-order"
+              className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-rose-300 text-rose-700 bg-white hover:bg-rose-50 transition-colors"
+            >
+              {isDelivered ? <AlertTriangle size={16} /> : <XCircle size={16} />}
+              {isDelivered ? 'Reportar un problema con el pedido' : 'Cancelar pedido'}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Modal de cancelación / reclamo del cliente */}
+      {cancelOpen && (
+        <div
+          className="fixed inset-0 z-[900] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }}
+        >
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0">
+                <XCircle size={22} />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-slate-900">
+                  {isDelivered ? 'Reportar un problema' : 'Cancelar pedido'}
+                </h3>
+                <p className="text-[11px] text-slate-500">Orden #ORD-{order.order_number}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 mt-3 mb-4">
+              {isDelivered
+                ? 'Cuéntanos qué ocurrió con tu pedido; la tienda se contactará contigo.'
+                : 'Indica el motivo. Si confirmas, la tienda será notificada.'}
+            </p>
+
+            <div className="space-y-2">
+              {(Object.keys(CUSTOMER_CANCELLATION_REASONS) as CustomerCancellationReason[]).map((code) => (
+                <label
+                  key={code}
+                  className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${cancelCode === code ? 'border-rose-400 bg-rose-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <input
+                    type="radio"
+                    name="cancel-reason"
+                    className="mt-0.5 accent-rose-600"
+                    checked={cancelCode === code}
+                    onChange={() => setCancelCode(code)}
+                  />
+                  <span className="text-xs font-medium text-slate-700 leading-snug">
+                    {CUSTOMER_CANCELLATION_REASONS[code]}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {requiresDetail && (
+              <textarea
+                value={cancelNote}
+                onChange={(e) => setCancelNote(e.target.value)}
+                rows={3}
+                maxLength={200}
+                placeholder="Especifica el motivo..."
+                className="mt-3 w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-1 focus:ring-rose-500 focus:border-rose-500 focus:outline-none"
+              />
+            )}
+
+            <div className="flex gap-3 mt-5">
+              <button
+                type="button"
+                onClick={() => { setCancelOpen(false); setCancelCode(''); setCancelNote(''); }}
+                className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-600 font-bold text-sm hover:bg-slate-50"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={submitCancellation}
+                disabled={!canConfirmCancel}
+                className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {cancelling && <Loader2 size={16} className="animate-spin" />}
+                {isDelivered ? 'Enviar reclamo' : 'Confirmar cancelación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSessionContext } from '@/lib/auth/session';
 import { notFound, redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import AdminDashboardClient from '../AdminDashboardClient';
-import type { Driver, Restaurant, Subscription } from '@/lib/supabase/types';
+import type { Driver, Order, Restaurant, Subscription } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const supabase = await createClient();
   const { data: restaurant } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('name')
     .eq('slug', slug)
     .maybeSingle();
@@ -31,9 +31,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function AdminMerchantPage({ params }: Props) {
   const { slug } = await params;
-  const cookieStore = await cookies();
-  const userRole = cookieStore.get('dtk_role')?.value || 'owner';
-  const userTenant = cookieStore.get('dtk_tenant')?.value;
+
+  // Rol y comercio desde la sesión real (no de cookies del cliente)
+  const session = await getSessionContext();
+  if (!session.userId) redirect('/login');
+
+  const userRole = session.role ?? 'owner';
+  const userTenant = session.tenantSlug;
 
   // Role Guard: Si es usuario de empaque, redirigir a su estación de empaque
   if (userRole === 'packing') {
@@ -48,12 +52,9 @@ export default async function AdminMerchantPage({ params }: Props) {
 
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user && !userTenant) redirect('/login');
-
   // Cargar todos los comercios para switcher (solo visible para superadmin)
   const { data: allRestaurants } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('*')
     .order('created_at', { ascending: true });
 
@@ -65,15 +66,23 @@ export default async function AdminMerchantPage({ params }: Props) {
   const { data: drivers } = await supabase
     .from('drivers')
     .select('*')
-    .eq('restaurant_id', restaurant.id);
+    .eq('tenant_id', restaurant.id);
 
   // Cargar suscripción activa
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('*')
-    .eq('restaurant_id', restaurant.id)
+    .eq('tenant_id', restaurant.id)
     .eq('is_active', true)
     .maybeSingle();
+
+  // Cargar órdenes recientes del comercio
+  const { data: initialOrders } = await supabase
+    .from('orders')
+    .select('*, driver:drivers(*)')
+    .eq('tenant_id', restaurant.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   return (
     <AdminDashboardClient
@@ -81,6 +90,7 @@ export default async function AdminMerchantPage({ params }: Props) {
       allRestaurants={userRole === 'superadmin' ? ((allRestaurants as Restaurant[]) || []) : []}
       drivers={(drivers as Driver[]) || []}
       subscription={subscription as Subscription | null}
+      initialOrders={(initialOrders as Order[]) || []}
       userRole={userRole}
     />
   );

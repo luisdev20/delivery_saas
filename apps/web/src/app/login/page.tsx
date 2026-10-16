@@ -25,75 +25,48 @@ export default function LoginPage() {
 
     try {
       let targetRole = 'owner';
-      let targetTenant = 'fuego-carbon';
-      let targetRedirect = '/admin/fuego-carbon';
-      let authenticated = false;
+      let targetTenant = 'libreria-atenea';
+      let targetRedirect = '/admin/libreria-atenea';
 
-      // 1. Intento de autenticación oficial con Supabase Auth
-      try {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
+      // 1. Autenticación real contra Supabase Auth: aquí se valida la contraseña.
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
 
-        if (!authError && authData.user) {
-          authenticated = true;
-          const { data: userProfile } = await supabase
-            .from('restaurant_users')
-            .select('role, restaurant_id, restaurants(slug)')
-            .eq('user_id', authData.user.id)
-            .maybeSingle();
+      if (authError || !authData.user) {
+        toast.error('Usuario o contraseña no válidos.');
+        setIsLoading(false);
+        return;
+      }
 
-          if (userProfile) {
-            targetRole = userProfile.role;
-            const restaurantSlug = (userProfile.restaurants as { slug?: string } | null)?.slug || 'fuego-carbon';
+      // 2. El rol y el comercio se derivan SIEMPRE del perfil del usuario autenticado
+      //    (tenant_users). No existen cuentas "preconfiguradas" por correo.
+      const { data: userProfile } = await supabase
+        .from('tenant_users')
+        .select('role, tenant_id, tenants(slug)')
+        .eq('user_id', authData.user.id)
+        .maybeSingle();
 
-            if (userProfile.role === 'superadmin') {
-              targetTenant = 'all';
-              targetRedirect = '/superadmin';
-            } else if (userProfile.role === 'packing') {
-              targetTenant = restaurantSlug;
-              targetRedirect = `/packing/${restaurantSlug}`;
-            } else {
-              targetTenant = restaurantSlug;
-              targetRedirect = `/admin/${restaurantSlug}`;
-            }
-          }
-        }
-      } catch (_) {}
+      if (!userProfile) {
+        await supabase.auth.signOut();
+        toast.error('Tu cuenta no tiene un comercio asignado. Contacta al administrador.');
+        setIsLoading(false);
+        return;
+      }
 
-      // 2. Cuentas de roles preconfiguradas
-      if (!authenticated) {
-        if (cleanEmail === 'admin@saas.com') {
-          targetRole = 'superadmin';
-          targetTenant = 'all';
-          targetRedirect = '/superadmin';
-          authenticated = true;
-        } else if (cleanEmail === 'admin@fuego-carbon.com') {
-          targetRole = 'owner';
-          targetTenant = 'fuego-carbon';
-          targetRedirect = '/admin/fuego-carbon';
-          authenticated = true;
-        } else if (cleanEmail === 'empaque@fuego-carbon.com') {
-          targetRole = 'packing';
-          targetTenant = 'fuego-carbon';
-          targetRedirect = '/packing/fuego-carbon';
-          authenticated = true;
-        } else if (cleanEmail === 'admin@libreria-atenea.com') {
-          targetRole = 'owner';
-          targetTenant = 'libreria-atenea';
-          targetRedirect = '/admin/libreria-atenea';
-          authenticated = true;
-        } else if (cleanEmail === 'empaque@libreria-atenea.com') {
-          targetRole = 'packing';
-          targetTenant = 'libreria-atenea';
-          targetRedirect = '/packing/libreria-atenea';
-          authenticated = true;
-        } else {
-          toast.error('Usuario o contraseña no válidos.');
-          setIsLoading(false);
-          return;
-        }
+      targetRole = userProfile.role;
+      const restaurantSlug = (userProfile.tenants as { slug?: string } | null)?.slug || 'libreria-atenea';
+
+      if (userProfile.role === 'superadmin') {
+        targetTenant = 'all';
+        targetRedirect = '/superadmin';
+      } else if (userProfile.role === 'packing') {
+        targetTenant = restaurantSlug;
+        targetRedirect = `/packing/${restaurantSlug}`;
+      } else {
+        targetTenant = restaurantSlug;
+        targetRedirect = `/admin/${restaurantSlug}`;
       }
 
       // Configurar cookies de sesión

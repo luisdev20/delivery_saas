@@ -16,7 +16,7 @@ export default async function OnboardingPage() {
 
   // Verificar que el usuario sea superadmin
   const { data: restaurantUser } = await supabase
-    .from('restaurant_users')
+    .from('tenant_users')
     .select('role')
     .eq('user_id', user.id)
     .maybeSingle();

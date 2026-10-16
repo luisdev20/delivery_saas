@@ -51,10 +51,16 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const dtkTenant = request.cookies.get('dtk_tenant')?.value;
-  const dtkRole = request.cookies.get('dtk_role')?.value;
+  // Rutas protegidas: requieren una sesión REAL de Supabase Auth.
+  // Las cookies dtk_role / dtk_tenant ya NO autorizan nada (el cliente
+  // puede escribirlas), así que no se usan como fuente de verdad.
+  const pathname = request.nextUrl.pathname;
+  const isProtectedRoute =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/superadmin') ||
+    pathname.startsWith('/packing');
 
-  if (!user && !dtkTenant && !dtkRole && (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/superadmin'))) {
+  if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -65,6 +71,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|tracking/|login|packing).*)',
+    '/((?!_next/static|_next/image|favicon.ico|tracking/|login).*)',
   ],
 };

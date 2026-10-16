@@ -7,6 +7,7 @@ import {
   Boxes, Bell, CheckCircle2, Clock, Volume2, VolumeX,
   Maximize2, Minimize2, PackageCheck, AlertCircle,
   Check, Layers, Sparkles, UserCheck, ShieldCheck, LogOut,
+  Package,
 } from 'lucide-react';
 import type { Restaurant, Order, OrderStatus } from '@/lib/supabase/types';
 
@@ -81,8 +82,8 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
   const refreshOrders = useCallback(async () => {
     const { data } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
-      .eq('restaurant_id', restaurant.id)
+      .select('*')
+      .eq('tenant_id', restaurant.id)
       .in('status', ['RECIBIDO', 'EN_PREPARACION', 'LISTO'])
       .order('created_at', { ascending: true });
     if (data) setOrders(data as Order[]);
@@ -96,12 +97,12 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
         event: '*',
         schema: 'public',
         table: 'orders',
-        filter: `restaurant_id=eq.${restaurant.id}`,
+        filter: `tenant_id=eq.${restaurant.id}`,
       }, async (payload) => {
         if (payload.eventType === 'INSERT') {
           const { data: newOrder } = await supabase
             .from('orders')
-            .select('*, order_items(*)')
+            .select('*')
             .eq('id', payload.new.id)
             .single();
 
@@ -160,7 +161,7 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
     setCheckedItems(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
-  const handlePackingLogout = () => {
+  const handlePackingLogout = async () => {
     document.cookie = 'dtk_role=; path=/; max-age=0';
     document.cookie = 'dtk_tenant=; path=/; max-age=0';
     try {
@@ -168,7 +169,10 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
       localStorage.removeItem('dtk_role');
       localStorage.removeItem('dtk_tenant');
     } catch {}
-    window.location.href = '/packing';
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    window.location.href = '/login';
   };
 
   const packingNuevos = useMemo(() => orders.filter(o => o.status === 'RECIBIDO'), [orders]);
@@ -396,34 +400,49 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
 
                       {/* Package Checklist */}
                       <div className="space-y-1 mb-2.5">
-                        {order.order_items?.map(item => {
-                          const isChecked = !!checkedItems[item.id];
-                          return (
-                            <div
-                              key={item.id}
-                              onClick={() => toggleItemCheck(item.id)}
-                              className={`p-1.5 rounded flex items-center justify-between gap-1.5 cursor-pointer transition-colors border ${
-                                isChecked
-                                  ? 'bg-slate-100 border-slate-200 opacity-50 line-through text-slate-400'
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-[10px] sm:text-xs flex items-center justify-center shrink-0">
-                                  {item.quantity}
-                                </span>
-                                <span className="font-bold text-[11px] sm:text-xs leading-tight truncate">
-                                  {item.product_name}
-                                </span>
-                              </div>
-                              <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
-                              }`}>
-                                {isChecked && <Check size={10} strokeWidth={3} />}
-                              </div>
+                        {order.package_notes ? (
+                          <div className="p-2 rounded bg-indigo-50/50 border border-indigo-100 text-slate-800 text-[11px] font-semibold flex items-start gap-1.5">
+                            <Package size={13} className="text-indigo-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <span className="text-[9px] uppercase font-bold text-indigo-700 block">Contenido del Paquete:</span>
+                              {order.package_notes}
                             </div>
-                          );
-                        })}
+                          </div>
+                        ) : order.order_items && order.order_items.length > 0 ? (
+                          order.order_items.map(item => {
+                            const isChecked = !!checkedItems[item.id];
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => toggleItemCheck(item.id)}
+                                className={`p-1.5 rounded flex items-center justify-between gap-1.5 cursor-pointer transition-colors border ${
+                                  isChecked
+                                    ? 'bg-slate-100 border-slate-200 opacity-50 line-through text-slate-400'
+                                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-[10px] sm:text-xs flex items-center justify-center shrink-0">
+                                    {item.quantity}
+                                  </span>
+                                  <span className="font-bold text-[11px] sm:text-xs leading-tight truncate">
+                                    {item.product_name}
+                                  </span>
+                                </div>
+                                <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
+                                }`}>
+                                  {isChecked && <Check size={10} strokeWidth={3} />}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-2 rounded bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-medium flex items-center gap-1.5">
+                            <Package size={13} className="text-slate-400" />
+                            <span>Paquete para despacho</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Action Button */}
@@ -520,34 +539,49 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
 
                       {/* Package Checklist */}
                       <div className="space-y-1 mb-2.5">
-                        {order.order_items?.map(item => {
-                          const isChecked = !!checkedItems[item.id];
-                          return (
-                            <div
-                              key={item.id}
-                              onClick={() => toggleItemCheck(item.id)}
-                              className={`p-1.5 rounded flex items-center justify-between gap-1.5 cursor-pointer transition-colors border ${
-                                isChecked
-                                  ? 'bg-slate-100 border-slate-200 opacity-50 line-through text-slate-400'
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-amber-100 border border-amber-300 text-amber-800 font-black text-[10px] sm:text-xs flex items-center justify-center shrink-0">
-                                  {item.quantity}
-                                </span>
-                                <span className="font-bold text-[11px] sm:text-xs leading-tight truncate">
-                                  {item.product_name}
-                                </span>
-                              </div>
-                              <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 ${
-                                isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
-                              }`}>
-                                {isChecked && <Check size={10} strokeWidth={3} />}
-                              </div>
+                        {order.package_notes ? (
+                          <div className="p-2 rounded bg-amber-50/50 border border-amber-200 text-slate-800 text-[11px] font-semibold flex items-start gap-1.5">
+                            <Package size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <span className="text-[9px] uppercase font-bold text-amber-800 block">Contenido del Paquete:</span>
+                              {order.package_notes}
                             </div>
-                          );
-                        })}
+                          </div>
+                        ) : order.order_items && order.order_items.length > 0 ? (
+                          order.order_items.map(item => {
+                            const isChecked = !!checkedItems[item.id];
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => toggleItemCheck(item.id)}
+                                className={`p-1.5 rounded flex items-center justify-between gap-1.5 cursor-pointer transition-colors border ${
+                                  isChecked
+                                    ? 'bg-slate-100 border-slate-200 opacity-50 line-through text-slate-400'
+                                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-amber-100 border border-amber-300 text-amber-800 font-black text-[10px] sm:text-xs flex items-center justify-center shrink-0">
+                                    {item.quantity}
+                                  </span>
+                                  <span className="font-bold text-[11px] sm:text-xs leading-tight truncate">
+                                    {item.product_name}
+                                  </span>
+                                </div>
+                                <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
+                                }`}>
+                                  {isChecked && <Check size={10} strokeWidth={3} />}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-2 rounded bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-medium flex items-center gap-1.5">
+                            <Package size={13} className="text-slate-400" />
+                            <span>Paquete para despacho</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Action Button */}
@@ -629,17 +663,29 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
 
                       {/* Items */}
                       <div className="space-y-1">
-                        {order.order_items?.map(item => (
-                          <div
-                            key={item.id}
-                            className="p-1 rounded bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700"
-                          >
-                            <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 text-[9px]">
-                              {item.quantity}
-                            </span>
-                            <span className="font-semibold text-[10px] sm:text-[11px] truncate">{item.product_name}</span>
+                        {order.package_notes ? (
+                          <div className="p-1.5 rounded bg-emerald-50/70 border border-emerald-100 flex items-center gap-1.5 text-slate-700">
+                            <Package size={12} className="text-emerald-600 shrink-0" />
+                            <span className="font-semibold text-[10px] sm:text-[11px] truncate">{order.package_notes}</span>
                           </div>
-                        ))}
+                        ) : order.order_items && order.order_items.length > 0 ? (
+                          order.order_items.map(item => (
+                            <div
+                              key={item.id}
+                              className="p-1 rounded bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-700"
+                            >
+                              <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 text-[9px]">
+                                {item.quantity}
+                              </span>
+                              <span className="font-semibold text-[10px] sm:text-[11px] truncate">{item.product_name}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-1 rounded bg-slate-50 border border-slate-100 flex items-center gap-1.5 text-slate-600">
+                            <Package size={12} className="text-slate-400 shrink-0" />
+                            <span className="font-semibold text-[10px] truncate">Paquete listo para despacho</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className={`p-1.5 rounded text-center border ${

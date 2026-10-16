@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     // Fallback: Si no hay x-api-key en headers pero se envió merchant_slug en body
     if (!auth && body.merchant_slug) {
       const { data: store } = await supabase
-        .from('restaurants')
+        .from('tenants')
         .select('id')
         .eq('slug', body.merchant_slug)
         .maybeSingle();
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
 
     // Obtener datos del comercio
     const { data: merchant, error: merchantError } = await supabase
-      .from('restaurants')
+      .from('tenants')
       .select('*')
       .eq('id', auth.restaurantId)
       .maybeSingle();
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('id, max_orders_per_month, orders_this_month, is_active')
-      .eq('restaurant_id', auth.restaurantId)
+      .eq('tenant_id', auth.restaurantId)
       .eq('is_active', true)
       .maybeSingle();
 
@@ -152,11 +152,10 @@ export async function POST(req: Request) {
     const pinCode = generatePinCode();
     const formattedNotes = `[${origin_system}] [PIN: ${pinCode}] ${notes ? `${notes}` : ''}`.trim();
 
-    // Intentar insertar con schema completo
-    let insertedOrder: { id: string; order_number: number; pin_code?: string } | null = null;
+    const packageDescription = parsedItems.map(it => `${it.quantity}x ${it.product_name}`).join(', ');
 
     const fullPayload = {
-      restaurant_id: auth.restaurantId,
+      tenant_id: auth.restaurantId,
       external_order_id: external_order_id ? String(external_order_id) : null,
       origin_system: String(origin_system),
       pin_code: pinCode,
@@ -167,11 +166,12 @@ export async function POST(req: Request) {
       delivery_lat: customerData.lat,
       delivery_lng: customerData.lng,
       status: 'RECIBIDO',
-      payment_method: paymentMethod,
-      cash_amount_change: paymentMethod === 'EFECTIVO' && payment?.cash_amount_change ? Number(payment.cash_amount_change) : null,
       total_amount: totalAmount,
+      package_notes: packageDescription,
       notes: formattedNotes,
     };
+
+    let insertedOrder: { id: string; order_number: number; pin_code?: string } | null = null;
 
     const { data: order1, error: error1 } = await supabase
       .from('orders')
@@ -182,44 +182,9 @@ export async function POST(req: Request) {
     if (!error1 && order1) {
       insertedOrder = order1;
     } else {
-      // Fallback a columnas base compatibles
-      const basePayload = {
-        restaurant_id: auth.restaurantId,
-        customer_name: customer.name,
-        customer_phone: customer.phone,
-        delivery_address: customer.address,
-        delivery_reference: customer.reference || null,
-        delivery_lat: customer.lat,
-        delivery_lng: customer.lng,
-        status: 'RECIBIDO',
-        payment_method: paymentMethod,
-        cash_amount_change: paymentMethod === 'EFECTIVO' && payment?.cash_amount_change ? Number(payment.cash_amount_change) : null,
-        total_amount: totalAmount,
-        notes: formattedNotes,
-      };
-
-      const { data: order2, error: error2 } = await supabase
-        .from('orders')
-        .insert(basePayload)
-        .select()
-        .single();
-
-      if (error2 || !order2) {
-        console.error('Error creating order in Supabase:', error2);
-        return NextResponse.json({ error: 'Error al registrar la orden en el motor logístico.' }, { status: 500 });
-      }
-      insertedOrder = { ...order2, pin_code: pinCode };
+      console.error('Error inserting order in Supabase:', error1);
+      return NextResponse.json({ error: 'Error al registrar el despacho en el motor logístico.' }, { status: 500 });
     }
-
-    // Insertar ítems
-    const orderItemsPayload = parsedItems.map(item => ({
-      order_id: insertedOrder!.id,
-      product_name: item.product_name,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-    }));
-
-    await supabase.from('order_items').insert(orderItemsPayload);
 
     // Incrementar contador de órdenes del mes
     if (subscription) {
@@ -267,8 +232,8 @@ export async function GET(req: Request) {
 
   let query = supabase
     .from('orders')
-    .select('*, driver:drivers(id, name, phone), order_items(*)')
-    .eq('restaurant_id', auth.restaurantId)
+    .select('*, driver:drivers(id, name, phone)')
+    .eq('tenant_id', auth.restaurantId)
     .order('created_at', { ascending: false })
     .limit(limit);
 

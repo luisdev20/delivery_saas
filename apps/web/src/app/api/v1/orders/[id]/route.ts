@@ -23,11 +23,11 @@ export async function GET(req: Request, { params }: Params) {
 
   let query = supabase
     .from('orders')
-    .select('*, driver:drivers(id, name, phone), order_items(*)')
+    .select('*, driver:drivers(id, name, phone)')
     .eq('id', id);
 
   if (auth) {
-    query = query.eq('restaurant_id', auth.restaurantId);
+    query = query.eq('tenant_id', auth.restaurantId);
   }
 
   const { data: order, error } = await query.maybeSingle();
@@ -75,7 +75,7 @@ export async function POST(req: Request, { params }: Params) {
       .from('orders')
       .select('id, status')
       .eq('id', id)
-      .eq('restaurant_id', auth.restaurantId)
+      .eq('tenant_id', auth.restaurantId)
       .single();
 
     if (orderError || !order) {

@@ -22,7 +22,7 @@ export default async function TrackingPage({ params }: Props) {
 
   const { data: order, error } = await supabase
     .from('orders')
-    .select('*, order_items(*)')
+    .select('*')
     .eq('id', orderId)
     .single();
 
@@ -31,9 +31,9 @@ export default async function TrackingPage({ params }: Props) {
   const ord = order as Order;
 
   const { data: restaurant } = await supabase
-    .from('restaurants')
+    .from('tenants')
     .select('*')
-    .eq('id', ord.restaurant_id)
+    .eq('id', ord.tenant_id || ord.restaurant_id)
     .single();
 
   if (!restaurant) notFound();
