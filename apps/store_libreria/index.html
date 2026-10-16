@@ -430,6 +430,7 @@
       { id: 'b-103', title: 'Sapiens: De animales a dioses', author: 'Yuval Noah Harari', publisher: 'Debate', format: 'Rústica &bull; 496 págs.', price: 50.00, qty: 1, color: '#8A5D28', coverLetter: 'S' }
     ];
 
+    const SAAS_URL = '__SAAS_URL__';
     let currentLat = -12.1180;
     let currentLng = -77.0188;
     let map = null;
@@ -680,14 +681,12 @@
       const currentInputAddress = document.getElementById('input-address')?.value;
 
       try {
-        const res = await fetch('http://localhost:3000/api/v1/quotes', {
+        const res = await fetch('/api/v1/quotes', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'dtk_live_libreria'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            merchant_slug: 'libreria-atenea',
             customer_lat: currentLat,
             customer_lng: currentLng,
             items_count: 3
@@ -745,14 +744,12 @@
       const notes = document.getElementById('input-notes')?.value || '';
 
       try {
-        const res = await fetch('http://localhost:3000/api/v1/orders', {
+        const res = await fetch('/api/v1/orders', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'dtk_live_libreria'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            merchant_slug: 'libreria-atenea',
             external_order_id: `ATENEA-${Math.floor(100 + Math.random() * 900)}`,
             origin_system: 'LIBRERIA_WEB',
             customer: {
@@ -791,7 +788,7 @@
 
           const btnActive = document.getElementById('btn-tracking-active');
           if (btnActive && orderId) {
-            btnActive.href = `http://localhost:3000/tracking/${orderId}`;
+            btnActive.href = `${SAAS_URL}/tracking/${orderId}`;
           }
         } else {
           alert(`Inconveniente al procesar: ${data.message || data.error || 'Verifique los datos'}`);

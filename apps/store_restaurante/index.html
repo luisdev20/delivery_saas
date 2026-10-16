@@ -256,7 +256,7 @@
   </footer>
 
   <script>
-    const SAAS_URL = 'http://localhost:3000';
+    const SAAS_URL = '__SAAS_URL__';
     const RESTAURANT_LAT = -12.0782;
     const RESTAURANT_LNG = -77.0854;
 
@@ -506,14 +506,12 @@
       if (btn) btn.innerText = 'Calculando...';
 
       try {
-        const res = await fetch(`${SAAS_URL}/api/v1/quotes`, {
+        const res = await fetch('/api/v1/quotes', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'dtk_live_restaurante'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            merchant_slug: 'fuego-carbon',
             customer_lat: currentLat,
             customer_lng: currentLng,
             items_count: products.length
@@ -573,14 +571,12 @@
       const notes = document.getElementById('input-notes')?.value || '';
 
       try {
-        const res = await fetch(`${SAAS_URL}/api/v1/orders`, {
+        const res = await fetch('/api/v1/orders', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'dtk_live_restaurante'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            merchant_slug: 'fuego-carbon',
             external_order_id: `FC-${Math.floor(100 + Math.random() * 900)}`,
             customer: { name: customerName, phone: customerPhone, address: customerAddress, lat: currentLat, lng: currentLng },
             payment: { method: 'YAPE', total_amount: subtotal + deliveryFee },
