@@ -1,219 +1,160 @@
-# GUÍA DE INICIALIZACIÓN: DELIVERY PLATFORM (SUPABASE + NEXT.JS + FLUTTER)
+# Guía de Inicialización — Delivery Tracker (Next.js + Flutter + Supabase)
 
-## 1. Estructura del Monorepo
+Motor logístico B2B (SaaS/DaaS) **agnóstico al rubro**: despacha pedidos de cualquier tipo de
+comercio (restaurantes, librerías, farmacias, retail, etc.). Ver `README.md` para el detalle funcional.
+
+---
+
+## 1. Estructura del monorepo
 
 ```text
-delivery-platform/
+delivery_saas/
 ├── apps/
-│   ├── web/               # Next.js 14+ (Panel Admin, Menú WhatsApp, Tracking Cliente)
-│   └── driver_app/        # Flutter (App de Repartidor con GPS en background)
-├── supabase/              # Configuración local / migrations de Supabase
-│   ├── migrations/
-│   └── config.toml
+│   ├── web/                 # Next.js 16 — consola admin, superadmin, empaque (packing), tracking y APIs B2B
+│   ├── mobile_driver/       # Flutter — app del repartidor (login por teléfono + contraseña, pool, ruta activa)
+│   ├── store_restaurante/   # Tienda demo B2B "Fuego & Carbón"  (cliente de la API) — puerto 3001
+│   └── store_libreria/      # Tienda demo B2B "Librería Atenea" (cliente de la API) — puerto 3002
+├── supabase/
+│   ├── migrations/          # 001 → 010 (se aplican a mano, en orden)
+│   ├── demo/                # utilidades de demo (p. ej. repartos frescos)
+│   └── seed.sql             # datos demo idempotentes
 ├── .env.example
-├── BUSINESS_MODEL.md
-├── SETUP.md
-└── README.md
-
+├── README.md
+└── SETUP.md
 ```
+
+> No hay `supabase/config.toml` ni historial del CLI: las migraciones se aplican manualmente
+> en el SQL Editor de Supabase, en orden numérico.
 
 ---
 
-## 2. Esquema SQL para Supabase (Database + Realtime + RLS)
+## 2. Requisitos
 
-Ejecuta este script en el **SQL Editor** de tu panel de Supabase:
-
-```sql
--- 1. Habilitar extensión UUID
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- 2. Tabla de Restaurantes (Tenants)
-CREATE TABLE restaurants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    slug VARCHAR(50) UNIQUE NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    address TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 3. Tabla de Repartidores (Drivers)
-CREATE TABLE drivers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 4. Menú de Productos (Criollo) con Gestión de Disponibilidad y Días
-CREATE TABLE products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    category VARCHAR(50) DEFAULT 'A la Carta', -- 'Menú del Día', 'A la Carta', 'Bebidas'
-    price DECIMAL(10, 2) NOT NULL,
-    is_available BOOLEAN DEFAULT true,          -- Switch de disponibilidad inmediata ("Se Agotó")
-    available_days INT[] DEFAULT '{1,2,3,4,5,6,7}', -- 1: Lunes, 7: Domingo
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 5. Tipos y Tabla de Órdenes (Solo Efectivo y Billeteras Digitales)
-CREATE TYPE order_status AS ENUM ('RECIBIDO', 'EN_PREPARACION', 'LISTO', 'EN_CAMINO', 'ENTREGADO', 'CANCELADO');
-CREATE TYPE payment_method AS ENUM ('EFECTIVO', 'YAPE', 'PLIN');
-
-CREATE TABLE orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
-    driver_id UUID REFERENCES drivers(id) ON DELETE SET NULL,
-    order_number SERIAL,
-    customer_name VARCHAR(100) NOT NULL,
-    customer_phone VARCHAR(20) NOT NULL,
-    delivery_address TEXT NOT NULL,
-    delivery_reference TEXT,
-    delivery_lat DOUBLE PRECISION NOT NULL,
-    delivery_lng DOUBLE PRECISION NOT NULL,
-    status order_status DEFAULT 'RECIBIDO',
-    payment_method payment_method DEFAULT 'EFECTIVO',
-    cash_amount_change DECIMAL(10, 2), -- Monto con el que paga si requiere vuelto en efectivo
-    total_amount DECIMAL(10, 2) NOT NULL, -- Total en Soles (PEN)
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    delivered_at TIMESTAMP WITH TIME ZONE
-);
-
--- 6. Detalle de la Orden
-CREATE TABLE order_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES products(id),
-    product_name VARCHAR(100) NOT NULL,
-    quantity INT NOT NULL,
-    unit_price DECIMAL(10, 2) NOT NULL
-);
-
--- 7. Coordenadas en Vivo del Repartidor
-CREATE TABLE driver_locations (
-    driver_id UUID PRIMARY KEY REFERENCES drivers(id) ON DELETE CASCADE,
-    restaurant_id UUID REFERENCES restaurants(id) ON DELETE CASCADE,
-    current_lat DOUBLE PRECISION NOT NULL,
-    current_lng DOUBLE PRECISION NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 8. Habilitar Supabase Realtime en las tablas clave
-ALTER PUBLICATION supabase_realtime ADD TABLE orders;
-ALTER PUBLICATION supabase_realtime ADD TABLE driver_locations;
-ALTER PUBLICATION supabase_realtime ADD TABLE products;
-
--- 9. Políticas de Seguridad (RLS) - Permisivo para prototipado
-ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE driver_locations ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Lectura pública de restaurantes" ON restaurants FOR SELECT USING (true);
-CREATE POLICY "Lectura pública de productos" ON products FOR SELECT USING (true);
-CREATE POLICY "Acceso total a productos para admin" ON products FOR ALL USING (true);
-CREATE POLICY "Acceso total a órdenes" ON orders FOR ALL USING (true);
-CREATE POLICY "Acceso total a order_items" ON order_items FOR ALL USING (true);
-CREATE POLICY "Acceso total a drivers" ON drivers FOR ALL USING (true);
-CREATE POLICY "Acceso total a driver_locations" ON driver_locations FOR ALL USING (true);
-
-```
+- **Node.js** 20+ y **npm** 10+
+- **Flutter** 3.x (con Android SDK y un emulador o dispositivo)
+- Un proyecto de **Supabase**
 
 ---
 
-## 3. Comandos de Inicialización en Terminal
-
-### Paso 1: Crear las aplicaciones del Monorepo
+## 3. Instalar dependencias (workspaces)
 
 ```bash
-# 1. Crear directorio base
-mkdir delivery-platform && cd delivery-platform
-mkdir -p apps
-
-# 2. Crear Frontend Web (Next.js con Tailwind y App Router)
-npx create-next-app@latest apps/web --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
-
-# 3. Crear App Repartidor (Flutter)
-flutter create --org com.delivery.driver apps/driver_app
-
+npm install
 ```
+
+Esto instala las dependencias de `apps/web` y de las tiendas demo. La app Flutter se resuelve aparte.
 
 ---
 
-### Paso 2: Configurar Dependencias en `apps/web`
+## 4. Base de datos
 
-```bash
-cd apps/web
-npm install @supabase/supabase-js @supabase/ssr leaflet lucide-react clsx tailwind-merge
-npm install -D @types/leaflet
+En el **SQL Editor** de tu proyecto Supabase:
 
-```
+1. Ejecuta, en orden, cada archivo de `supabase/migrations/`:
 
-Crea el archivo `apps/web/.env.local`:
+   ```text
+   001_initial_schema.sql → 002_multitenant.sql → 003_daas_state_machine_and_api.sql
+   → 004_refactor_to_tenant_daas.sql → 005_fix_driver_rls.sql
+   → 006_order_cancellation_rpc.sql → 007_driver_lifecycle.sql
+   → 008_auth_driver_credentials.sql → 009_tenants_missing_columns.sql
+   → 010_order_status_timestamps.sql
+   ```
+
+2. Ejecuta `supabase/seed.sql` (crea los comercios, repartidores y credenciales demo).
+
+3. Crea las **cuentas de acceso web** (Supabase Auth → Authentication → Users) y enlázalas en
+   `tenant_users` con su rol:
+
+   ```sql
+   INSERT INTO tenant_users (user_id, tenant_id, role) VALUES
+     ('<uuid-de-auth>', '00000000-0000-0000-0000-000000000002', 'owner');
+   ```
+
+   Roles: `superadmin` (acceso global), `owner` (dueño del comercio), `packing` (estación de empaque).
+
+---
+
+## 5. Variables de entorno
+
+**Web** — crea `apps/web/.env.local` (basado en `.env.example`):
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key-aqui
-
+NEXT_PUBLIC_SUPABASE_URL=https://<proyecto>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>          # o NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>       # solo servidor; nunca exponer al cliente
+NEXT_PUBLIC_APP_NAME="DeliveryOS"
 ```
 
-Crea el cliente en `apps/web/src/lib/supabaseClient.ts`:
+**App móvil** — copia `apps/mobile_driver/.env.example` a `apps/mobile_driver/.env`:
 
-```typescript
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
+```env
+SUPABASE_URL=https://<proyecto>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
 ```
+
+Los archivos `.env` y `.env.local` están en `.gitignore`.
 
 ---
 
-### Paso 3: Configurar Dependencias en `apps/driver_app`
+## 6. Ejecutar
 
 ```bash
-cd ../driver_app
-flutter pub add supabase_flutter geolocator url_launcher flutter_background_service
+# Web + tiendas demo en paralelo (turbo)
+npm run dev
+#   web                → http://localhost:3000
+#   Fuego & Carbón     → http://localhost:3001
+#   Librería Atenea    → http://localhost:3002
 
+# Tiendas demo por separado
+npm run demo:restaurante
+npm run demo:libreria
 ```
 
-Inicializa Supabase en `apps/driver_app/lib/main.dart`:
+**App del repartidor:**
 
-```dart
-import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: 'https://tu-proyecto.supabase.co',
-    anonKey: 'tu-anon-key-aqui',
-  );
-
-  runApp(const MaterialApp(
-    home: Scaffold(
-      body: Center(child: Text('Driver App Lista')),
-    ),
-  ));
-}
-
+```bash
+cd apps/mobile_driver
+flutter run -d emulator-5554 --dart-define-from-file=.env
 ```
 
 ---
 
-## 4. Rutas Principales a Construir en `apps/web`
+## 7. Rutas principales
 
-1. **`src/app/p/[slug]/page.tsx`**: Vista cliente para armar pedidos criollos en Soles (PEN) filtrados por disponibilidad del día, seleccionar método de pago directo (Yape, Plin, Efectivo) y enviar ubicación GPS.
-2. **`src/app/admin/page.tsx`**: Panel de recepción de pedidos con alertas sonoras en vivo, mapa general de flota y asignación de motorizados.
-3. **`src/app/admin/menu/page.tsx`**: Panel de gestión rápida para alternar el switch de disponibilidad de platos (`is_available`) y programar platos por día de la semana.
-4. **`src/app/tracking/[orderId]/page.tsx`**: Mapa en vivo (Leaflet) que suscribe los cambios de posición en `driver_locations`.
+| Ruta | Tipo | Descripción |
+|---|:--:|---|
+| `POST /api/v1/orders` | API B2B | Crear despacho (requiere `x-api-key`). |
+| `GET /api/v1/orders/[id]` | API B2B | Estado, telemetría GPS y bitácora. |
+| `POST /api/v1/orders/[id]/cancel` | API B2B | Cancelación estructurada con motivo. |
+| `POST /api/v1/quotes` | API B2B | Cotización de envío. |
+| `/admin` | Web | Consola de despacho (pedidos, flota, métricas, API keys). |
+| `/superadmin` | Web | Consola de superadmin (todos los comercios). |
+| `/packing/[slug]` | Web | Estación de empaque / preparación. |
+| `/tracking/[orderId]` | Web | Seguimiento para el cliente (PIN anti-fraude). |
+| `/onboarding` | Web | Alta de nuevos comercios. |
+| `/login` | Web | Acceso por Supabase Auth (rol derivado de `tenant_users`). |
+
+---
+
+## 8. Datos y cuentas demo
+
+**Comercios:** `fuego-carbon` (id `…0001`) y `libreria-atenea` (id `…0002`).
+
+**Repartidores demo** (login en la app: teléfono + contraseña):
+
+| Teléfono | Repartidor | Comercio |
+|---|---|---|
+| `942000001` | Jorge Mendoza | Librería Atenea |
+| `942000002` | Diego Salazar | Librería Atenea |
+| `941000001` | Carlos Rios | Fuego & Carbón |
+| `941000002` | Miguel Torres | Fuego & Carbón |
+
+> Las cuentas y repartidores **demo** usan la contraseña `demo1234`. En un entorno real, las
+> contraseñas se definen desde el panel (acción **Contraseña**) y se guardan hasheadas con
+> `pgcrypto` en `driver_credentials` — nunca en texto plano.
+
+**Cuentas web demo:** `admin@fuego-carbon.com` (owner), `admin@libreria-atenea.com` (owner),
+`empaque@libreria-atenea.com` (packing), `admin@saas.com` (superadmin).
+
+**Repartos de prueba:** para no arrastrar tiempos de espera, ejecuta
+`supabase/demo/crear_repartos_frescos.sql` el mismo día de la presentación.
