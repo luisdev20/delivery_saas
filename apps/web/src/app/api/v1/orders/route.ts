@@ -26,25 +26,13 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 
 // POST /api/v1/orders - Crear requerimiento de despacho logístico
 export async function POST(req: Request) {
-  let auth = await authenticateApiKey(req);
+  const auth = await authenticateApiKey(req);
   const supabase = getSupabaseClient();
 
   try {
     const body = await req.json();
 
-    // Fallback: Si no hay x-api-key en headers pero se envió merchant_slug en body
-    if (!auth && body.merchant_slug) {
-      const { data: store } = await supabase
-        .from('tenants')
-        .select('id')
-        .eq('slug', body.merchant_slug)
-        .maybeSingle();
-
-      if (store) {
-        auth = { restaurantId: store.id, keyId: 'slug-auth' };
-      }
-    }
-
+    // La autenticación es exclusivamente por clave de API (x-api-key).
     if (!auth) {
       return NextResponse.json(
         { error: 'No autorizado. Proporcione una clave de API válida en la cabecera `x-api-key`.' },
@@ -166,6 +154,7 @@ export async function POST(req: Request) {
       delivery_lat: customerData.lat,
       delivery_lng: customerData.lng,
       status: 'RECIBIDO',
+      payment_method: paymentMethod,
       total_amount: totalAmount,
       package_notes: packageDescription,
       notes: formattedNotes,

@@ -14,7 +14,7 @@ export async function authenticateApiKey(req: Request): Promise<{ restaurantId: 
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-  // Use service role or anon key to query merchant_api_keys
+  // Use service role or anon key to query tenant_api_keys
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'tu-service-role-key-aqui'
     ? process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -22,34 +22,12 @@ export async function authenticateApiKey(req: Request): Promise<{ restaurantId: 
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Demo key support for local and multi-store testing
-  if (apiKey === 'dtk_live_libreria' || apiKey.includes('libreria')) {
-    return { restaurantId: '00000000-0000-0000-0000-000000000002', keyId: 'demo-libreria' };
-  }
-
-  if (apiKey === 'dtk_live_restaurante' || apiKey === 'dtk_live_demo' || apiKey.includes('fuego') || apiKey.includes('carbon')) {
-    return { restaurantId: '00000000-0000-0000-0000-000000000001', keyId: 'demo-restaurante' };
-  }
-
-  let { data: keyRecord, error } = await supabase
+  const { data: keyRecord, error } = await supabase
     .from('tenant_api_keys')
     .select('id, tenant_id, is_active')
     .eq('key_hash', keyHash)
     .eq('is_active', true)
     .maybeSingle();
-
-  if (!keyRecord) {
-    const { data: legacyKey } = await supabase
-      .from('merchant_api_keys')
-      .select('id, restaurant_id, is_active')
-      .eq('key_hash', keyHash)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (legacyKey) {
-      keyRecord = { id: legacyKey.id, tenant_id: legacyKey.restaurant_id, is_active: legacyKey.is_active };
-    }
-  }
 
   if (error || !keyRecord) {
     return null;
@@ -71,7 +49,8 @@ export async function generateApiKey(): Promise<{ rawKey: string; keyHash: strin
   crypto.getRandomValues(bytes);
   const randomHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   const rawKey = `dtk_live_${randomHex}`;
-  const keyPrefix = rawKey.substring(0, 14) + '...';
+  // 13 + '...' = 16 chars, ajustado a la columna key_prefix VARCHAR(16)
+  const keyPrefix = rawKey.substring(0, 13) + '...';
 
   const encoder = new TextEncoder();
   const data = encoder.encode(rawKey);

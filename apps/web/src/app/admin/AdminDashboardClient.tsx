@@ -705,7 +705,7 @@ export default function AdminDashboardClient({
       ? Math.round((delivered.length / (delivered.length + cancelled.length || 1)) * 100)
       : 0;
 
-    const paymentCounts: Record<string, number> = { EFECTIVO: 0, YAPE: 0, PLIN: 0, PAGADO_ORIGEN: 0 };
+    const paymentCounts: Record<string, number> = { EFECTIVO: 0, YAPE: 0, PLIN: 0 };
     delivered.forEach(o => {
       if (o.payment_method) {
         paymentCounts[o.payment_method] = (paymentCounts[o.payment_method] || 0) + 1;
@@ -1679,7 +1679,7 @@ export default function AdminDashboardClient({
       { "name": "Medicamentos / Zapatillas / Pedido Criollo", "quantity": 1, "unit_price": 45.00 }
     ],
     "payment": {
-      "method": "PAGADO_ORIGEN",
+      "method": "YAPE",
       "total_amount": 45.00
     },
     "notes": "Llamar al llegar a la puerta"
@@ -1707,7 +1707,7 @@ export default function AdminDashboardClient({
       { name: 'Paquete de despacho', quantity: 1, unit_price: 45.00 }
     ],
     payment: {
-      method: 'PAGADO_ORIGEN',
+      method: 'YAPE',
       total_amount: 45.00,
     },
   }),
@@ -1736,12 +1736,22 @@ payload = {
         "lng": -77.0298,
     },
     "items": [{"name": "Paquete logística", "quantity": 1, "unit_price": 45.00}],
-    "payment": {"method": "PAGADO_ORIGEN", "total_amount": 45.00},
+    "payment": {"method": "YAPE", "total_amount": 45.00},
 }
 
 response = requests.post(url, json=payload, headers=headers)
 print(response.json())`}</pre>
                 )}
+              </div>
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+                <strong className="text-slate-700">Notas:</strong> métodos de pago válidos:{' '}
+                <code className="font-mono text-indigo-700">EFECTIVO</code>,{' '}
+                <code className="font-mono text-indigo-700">YAPE</code>,{' '}
+                <code className="font-mono text-indigo-700">PLIN</code>. Envía la clave desde tu{' '}
+                <strong>servidor</strong> (nunca en el navegador). La respuesta incluye{' '}
+                <code className="font-mono text-indigo-700">order_id</code>,{' '}
+                <code className="font-mono text-indigo-700">pin_code</code> y{' '}
+                <code className="font-mono text-indigo-700">tracking_url</code>.
               </div>
             </div>
           </div>

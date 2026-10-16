@@ -66,55 +66,53 @@ export async function POST(req: Request, { params }: Params) {
   const { id } = await params;
   const supabase = getSupabaseClient();
 
+  let body: { reason?: string; notes?: string } = {};
   try {
-    const body = await req.json();
-    const { reason = 'OTRO', notes } = body;
-
-    // Verificar si la orden existe y pertenece al comercio
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, status')
-      .eq('id', id)
-      .eq('tenant_id', auth.restaurantId)
-      .single();
-
-    if (orderError || !order) {
-      return NextResponse.json({ error: 'Orden no encontrada.' }, { status: 404 });
-    }
-
-    if (order.status === 'ENTREGADO') {
-      return NextResponse.json({ error: 'No se puede cancelar una orden ya entregada.' }, { status: 400 });
-    }
-
-    if (order.status === 'CANCELADO') {
-      return NextResponse.json({ error: 'La orden ya se encuentra cancelada.' }, { status: 400 });
-    }
-
-    const structuredReason = (CANCELLATION_REASONS[reason as CancellationReason] ? reason : 'OTRO') as CancellationReason;
-    const cancellationText = `${CANCELLATION_REASONS[structuredReason]}${notes ? `: ${notes}` : ''}`;
-
-    const { data: updated, error: updateError } = await supabase
-      .from('orders')
-      .update({
-        status: 'CANCELADO',
-        cancellation_reason: cancellationText,
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: 'Error al cancelar la orden.' }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      success: true,
-      order_id: updated.id,
-      status: 'CANCELADO',
-      cancellation_reason: cancellationText,
-      message: 'Orden cancelada exitosamente.',
-    });
-  } catch (error) {
+    body = await req.json();
+  } catch {
     return NextResponse.json({ error: 'Payload JSON inválido.' }, { status: 400 });
   }
+
+  const { reason = 'OTRO', notes } = body;
+
+  // Verificar que la orden pertenece al comercio autenticado (evita IDOR)
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('id', id)
+    .eq('tenant_id', auth.restaurantId)
+    .maybeSingle();
+
+  if (orderError || !order) {
+    return NextResponse.json({ error: 'Orden no encontrada.' }, { status: 404 });
+  }
+
+  const reasonCode = (CANCELLATION_REASONS[reason as CancellationReason] ? reason : 'OTRO') as CancellationReason;
+
+  // Una sola vía de ejecución: la misma RPC que usan la app del repartidor y el tracking.
+  const { data: result, error: rpcError } = await supabase.rpc('cancel_order', {
+    p_order_id: id,
+    p_source: 'TIENDA',
+    p_reason_code: reasonCode,
+    p_notes: notes ?? null,
+    p_driver_id: null,
+  });
+
+  if (rpcError) {
+    return NextResponse.json({ error: 'Error al cancelar la orden.' }, { status: 500 });
+  }
+
+  const outcome = result as { success: boolean; outcome?: string; reason?: string; error?: string } | null;
+  if (!outcome?.success) {
+    return NextResponse.json({ error: outcome?.error || 'No se pudo cancelar la orden.' }, { status: 400 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    order_id: id,
+    status: 'CANCELADO',
+    outcome: outcome.outcome,
+    cancellation_reason: outcome.reason,
+    message: outcome.outcome === 'RECLAMO' ? 'Reclamo registrado.' : 'Orden cancelada exitosamente.',
+  });
 }

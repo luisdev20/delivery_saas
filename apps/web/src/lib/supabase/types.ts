@@ -113,7 +113,7 @@ export interface Driver {
   created_at: string;
 }
 
-export type PaymentMethod = 'EFECTIVO' | 'YAPE' | 'PLIN' | 'PAGADO_ORIGEN' | string;
+export type PaymentMethod = 'EFECTIVO' | 'YAPE' | 'PLIN';
 
 export interface OrderItem {
   id: string;
