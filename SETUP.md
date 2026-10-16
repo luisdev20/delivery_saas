@@ -110,6 +110,11 @@ npm run demo:restaurante
 npm run demo:libreria
 ```
 
+> **Clave de las tiendas demo:** cada tienda necesita `apps/store_<tienda>/.env` con
+> `DELIVERY_API_KEY=dtk_live_…` (cópialo de `.env.example`). Genera la clave en la consola del
+> comercio (*Integración API B2B → Generar Clave API*). El `server.js` de la tienda hace de **proxy**,
+> por lo que la clave nunca se expone al navegador.
+
 **App del repartidor:**
 
 ```bash
@@ -125,7 +130,7 @@ flutter run -d emulator-5554 --dart-define-from-file=.env
 |---|:--:|---|
 | `POST /api/v1/orders` | API B2B | Crear despacho (requiere `x-api-key`). |
 | `GET /api/v1/orders/[id]` | API B2B | Estado, telemetría GPS y bitácora. |
-| `POST /api/v1/orders/[id]/cancel` | API B2B | Cancelación estructurada con motivo. |
+| `POST /api/v1/orders/[id]` | API B2B | Cancelación estructurada con motivo (misma RPC que cliente/repartidor). |
 | `POST /api/v1/quotes` | API B2B | Cotización de envío. |
 | `/admin` | Web | Consola de despacho (pedidos, flota, métricas, API keys). |
 | `/superadmin` | Web | Consola de superadmin (todos los comercios). |

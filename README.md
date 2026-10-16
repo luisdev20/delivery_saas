@@ -25,7 +25,7 @@
 |---|:---:|---|
 | **`POST /api/v1/orders`** | `API B2B` | Crear requerimiento de despacho (requiere cabecera `x-api-key`). |
 | **`GET /api/v1/orders/[id]`** | `API B2B` | Consultar estado, telemetría GPS del motorizado y bitácora. |
-| **`POST /api/v1/orders/[id]/cancel`** | `API B2B` | Cancelación estructurada con motivo (`QUIEBRE_STOCK`, etc.). |
+| **`POST /api/v1/orders/[id]`** | `API B2B` | Cancelación estructurada con motivo (`QUIEBRE_STOCK`, `TIEMPO_EXCEDIDO`, …). |
 | **`POST /api/v1/quotes`** | `API B2B` | Cotización de envío. |
 | **`POST /api/v1/keys`** | `API` | Generación de tokens de acceso B2B (`dtk_live_...`). |
 | **`/admin`** | `Web UI` | Consola de Despacho DaaS, Flota, Gestión de API Keys y Métricas. |
@@ -66,6 +66,11 @@ npm run dev
 La aplicación web estará disponible en **`http://localhost:3000`**, y las tiendas demo B2B en
 **`http://localhost:3001`** (Fuego & Carbón) y **`http://localhost:3002`** (Librería Atenea).
 
+> Las tiendas demo consumen la API con una **clave propia**: copia `apps/store_<tienda>/.env.example`
+> a `.env` y pega la clave generada en el panel (*Integración API B2B → Generar Clave API*). El
+> `server.js` de cada tienda actúa de **proxy** y añade la clave, por lo que el token nunca se expone
+> al navegador.
+>
 > Para el detalle completo de base de datos, migraciones, seed, cuentas demo y app móvil, ver
 > **[`SETUP.md`](./SETUP.md)**.
 
@@ -100,6 +105,25 @@ curl -X POST "http://localhost:3000/api/v1/orders" \
 
 ---
 
+## Integración B2B: cómo conectar tu negocio (ej. Librería Atenea)
+
+1. **Genera una clave** en la consola: *Comercio → Integración API B2B → Generar Clave API*. Se
+   muestra **una sola vez** (`dtk_live_…`); guárdala como variable de entorno del **servidor** del
+   comercio (nunca en el navegador).
+2. **(Opcional) Cotiza** antes de cerrar la venta: `POST /api/v1/quotes` →
+   `delivery_fee`, `covered`, `estimated_time_minutes`.
+3. **Crea el despacho**: `POST /api/v1/orders` con `x-api-key`. La respuesta incluye `order_id`,
+   `order_number`, `pin_code` y `tracking_url`.
+4. **Comparte** el `tracking_url` con el cliente (mapa en vivo + PIN anti-fraude).
+5. **(Opcional) Consulta o cancela**: `GET /api/v1/orders/{id}` y `POST /api/v1/orders/{id}` con
+   `{ "reason": "QUIEBRE_STOCK", "notes": "…" }`.
+
+La autenticación es **exclusivamente** por `x-api-key`. Las tiendas demo (`apps/store_*`)
+implementan este patrón **desde su propio servidor**: el `server.js` actúa de proxy y añade la clave,
+de modo que el token nunca llega al navegador.
+
+---
+
 ## Estructura del Monorepo
 
 ```text
@@ -116,8 +140,8 @@ delivery_SaaS/
 │   │   │   │   └── onboarding/  # Asistente de alta de comercios
 │   │   │   └── lib/             # Supabase client, sesión y Auth de API Keys
 │   ├── mobile_driver/           # App móvil Flutter para repartidores
-│   ├── store_restaurante/       # Tienda demo B2B "Fuego & Carbón" (puerto 3001)
-│   └── store_libreria/          # Tienda demo B2B "Librería Atenea" (puerto 3002)
+│   ├── store_restaurante/       # Tienda demo B2B "Fuego & Carbón" (puerto 3001, integrada vía proxy)
+│   └── store_libreria/          # Tienda demo B2B "Librería Atenea" (puerto 3002, integrada vía proxy)
 └── supabase/
     ├── migrations/              # 001 → 010 (esquema multi-tenant, DaaS, cancelaciones, ciclo de vida del repartidor y marcas de tiempo de estado)
     ├── demo/                    # utilidades de demo (repartos frescos)
