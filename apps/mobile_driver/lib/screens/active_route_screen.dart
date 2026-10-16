@@ -8,6 +8,7 @@ import '../models/driver_model.dart';
 import '../models/order_model.dart';
 import '../core/services/location_service.dart';
 import 'delivery_success_screen.dart';
+import 'order_pool_screen.dart';
 
 class ActiveRouteScreen extends StatefulWidget {
   final DriverModel driver;
@@ -25,6 +26,14 @@ class ActiveRouteScreen extends StatefulWidget {
   State<ActiveRouteScreen> createState() => _ActiveRouteScreenState();
 }
 
+/// Motivos de cancelación que puede elegir el repartidor (deben coincidir con la RPC cancel_order).
+const Map<String, String> _driverCancelReasons = {
+  'DRIVER_CLIENT_REFUSED': 'El cliente se rehusó a recibir el pedido',
+  'DRIVER_NO_SHOW': 'No salieron a recibir el pedido',
+  'DRIVER_CANT_REACH': 'No me es posible llegar al destino',
+  'DRIVER_OTHER': 'Otros (especificar)',
+};
+
 class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   final _supabase = Supabase.instance.client;
   final _locationService = LocationService();
@@ -35,6 +44,7 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   double _distanceKm = 1.2;
   int _etaMinutes = 8;
   bool _isSubmittingPin = false;
+  bool _isCancelling = false;
 
   @override
   void initState() {
@@ -155,6 +165,7 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     }
 
     if (!isValid) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('PIN incorrecto. Solicite al cliente el código de 4 dígitos mostrado en su pantalla de seguimiento.'),
@@ -169,7 +180,9 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     try {
       await _supabase.from('orders').update({
         'status': 'ENTREGADO',
-        'delivered_at': DateTime.now().toIso8601String(),
+        // UTC explícito: la BD guarda timestamptz; enviar hora local (sin zona)
+        // producía ciclos negativos en las métricas.
+        'delivered_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', widget.order.id);
 
       await _locationService.stopTracking();
@@ -193,6 +206,199 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmittingPin = false);
+    }
+  }
+
+  Future<void> _showCancelSheet() async {
+    String? selected;
+    final noteController = TextEditingController();
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final needsDetail = selected == 'DRIVER_OTHER';
+            final canConfirm =
+                selected != null && (!needsDetail || noteController.text.trim().isNotEmpty);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Cancelar entrega',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Selecciona el motivo. La tienda y el cliente serán notificados.',
+                    style: TextStyle(fontSize: 12, color: AppColors.slate500),
+                  ),
+                  const SizedBox(height: 14),
+                  ..._driverCancelReasons.entries.map((e) {
+                    final isSelected = selected == e.key;
+                    return GestureDetector(
+                      onTap: () => setSheetState(() => selected = e.key),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFFDC2626) : AppColors.slate200,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          color: isSelected ? const Color(0xFFFEF2F2) : Colors.white,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                              size: 20,
+                              color: isSelected ? const Color(0xFFDC2626) : AppColors.slate400,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(e.value, style: const TextStyle(fontSize: 13))),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  if (needsDetail) ...[
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: noteController,
+                      maxLength: 200,
+                      onChanged: (_) => setSheetState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Especifica el motivo...',
+                        counterText: '',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Volver'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Confirmar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true && selected != null && mounted) {
+      await _cancelDelivery(selected!, noteController.text.trim());
+    }
+    noteController.dispose();
+  }
+
+  Future<void> _cancelDelivery(String reasonCode, String notes) async {
+    setState(() => _isCancelling = true);
+    try {
+      final res = await _supabase.rpc('cancel_order', params: {
+        'p_order_id': widget.order.id,
+        'p_source': 'REPARTIDOR',
+        'p_reason_code': reasonCode,
+        'p_notes': notes.isEmpty ? null : notes,
+        'p_driver_id': widget.driver.id,
+      });
+
+      final data = res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+      if (data['success'] != true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['error']?.toString() ?? 'No se pudo cancelar la entrega.')),
+          );
+        }
+        return;
+      }
+
+      await _locationService.stopTracking();
+
+      // Garantizar que la telemetría no quede ligada a la orden cancelada
+      // (evita la carrera entre el timer del GPS y el NULL de la RPC).
+      try {
+        await _supabase
+            .from('driver_locations')
+            .update({'current_order_id': null})
+            .eq('driver_id', widget.driver.id);
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Entrega cancelada. La tienda y el cliente fueron notificados.'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+        // La ruta activa se abrió con pushReplacement (no hay pila debajo),
+        // así que volvemos a la bolsa de pedidos en lugar de hacer pop().
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => OrderPoolScreen(driver: widget.driver)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión al cancelar la entrega.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
     }
   }
 
@@ -421,6 +627,32 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isCancelling ? null : _showCancelSheet,
+                      icon: _isCancelling
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFDC2626),
+                              ),
+                            )
+                          : const Icon(Icons.cancel_outlined, size: 18, color: Color(0xFFDC2626)),
+                      label: const Text(
+                        'Cancelar entrega',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
                 ],
               ),

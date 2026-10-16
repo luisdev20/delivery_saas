@@ -1,17 +1,58 @@
-# mobile_driver
+# mobile_driver — App de Repartidor (Flutter)
 
-A new Flutter project.
+App Android/iOS para motorizados de Delivery Tracker. Consume Supabase de forma directa
+(login por teléfono, pool de pedidos `LISTO`, telemetría GPS y validación por PIN).
 
-## Getting Started
+## Requisitos
 
-This project is a starting point for a Flutter application.
+- Flutter 3.x (`flutter --version`)
+- Android SDK + un emulador o dispositivo
 
-A few resources to get you started if this is your first Flutter project:
+## Configuración
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Las credenciales **no** están hardcodeadas. Se inyectan en tiempo de compilación desde un
+archivo `.env` (no versionado):
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+cp .env.example .env
+# edita .env con tus credenciales reales
+```
+
+`.env`:
+
+```env
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_...
+```
+
+> El archivo `.env` está en `.gitignore`. Nunca subas credenciales al repo.
+
+## Ejecutar
+
+```bash
+flutter pub get
+
+# Inyectando las credenciales desde .env
+flutter run --dart-define-from-file=.env
+```
+
+Para un emulador específico:
+
+```bash
+flutter devices
+flutter run -d emulator-5554 --dart-define-from-file=.env
+```
+
+Si olvidas el flag, la app arranca con un error explícito indicando que faltan
+`SUPABASE_URL` / `SUPABASE_ANON_KEY`.
+
+## Credenciales demo (repartidores)
+
+| Teléfono | Repartidor | Tenant |
+|---|---|---|
+| `941000001` | Carlos Rios | Fuego & Carbón |
+| `941000002` | Miguel Torres | Fuego & Carbón |
+| `942000001` | Jorge Mendoza | Librería Atenea |
+| `942000002` | Diego Salazar | Librería Atenea |
+
+(la contraseña no se valida en el modo demo por teléfono)

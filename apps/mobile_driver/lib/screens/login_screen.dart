@@ -6,7 +6,9 @@ import '../models/driver_model.dart';
 import 'order_pool_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialMessage;
+
+  const LoginScreen({super.key, this.initialMessage});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -24,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _errorMessage = widget.initialMessage;
     _checkSavedSession();
   }
 
@@ -43,7 +46,8 @@ class _LoginScreenState extends State<LoginScreen> {
             .from('drivers')
             .select('*')
             .eq('id', savedDriverId)
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 2));
 
         if (res != null && mounted) {
           final driver = DriverModel.fromJson(res);
@@ -52,8 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
               context,
               MaterialPageRoute(builder: (_) => OrderPoolScreen(driver: driver)),
             );
+            return;
           } else {
             await prefs.remove('saved_driver_id');
+            if (mounted) setState(() => _errorMessage = 'Usuario inactivo');
           }
         }
       } catch (_) {}
@@ -72,74 +78,55 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     try {
-      DriverModel? matchedDriver;
+      // Validación de credenciales en el servidor: el RPC `driver_login`
+      // verifica teléfono + contraseña (hash) y el estado del repartidor.
+      final response = await Supabase.instance.client
+          .rpc('driver_login', params: {
+            'p_identifier': input,
+            'p_password': password,
+          })
+          .timeout(const Duration(seconds: 8));
 
-      // 1. Intentar inicio de sesión vía Supabase Auth si es correo
-      if (input.contains('@')) {
-        try {
-          final authRes = await Supabase.instance.client.auth.signInWithPassword(
-            email: input,
-            password: password,
-          );
-          if (authRes.user != null) {
-            final driverRes = await Supabase.instance.client
-                .from('drivers')
-                .select('*')
-                .eq('user_id', authRes.user!.id)
-                .maybeSingle();
-            if (driverRes != null) {
-              matchedDriver = DriverModel.fromJson(driverRes);
-            }
-          }
-        } catch (_) {
-          // Si falla Auth estándar, intentamos búsqueda directa por teléfono / credenciales
-        }
-      }
+      final result = response is Map
+          ? Map<String, dynamic>.from(response)
+          : <String, dynamic>{};
 
-      // 2. Si no se autenticó por Supabase Auth, buscar en tabla drivers por teléfono o nombre
-      if (matchedDriver == null) {
-        final cleanPhone = input.replaceAll(RegExp(r'\D'), '');
-        final res = await Supabase.instance.client
-            .from('drivers')
-            .select('*')
-            .or('phone.eq.$input,phone.eq.$cleanPhone,name.ilike.%$input%')
-            .maybeSingle();
-
-        if (res != null) {
-          matchedDriver = DriverModel.fromJson(res);
-        }
-      }
-
-      // 3. Validar resultados
-      if (matchedDriver == null) {
+      if (result['success'] != true || result['driver'] == null) {
         setState(() {
-          _errorMessage = 'No se encontró ningún repartidor con este usuario o teléfono.';
+          _errorMessage =
+              (result['error'] as String?) ?? 'Usuario o contraseña no válidos.';
         });
         return;
       }
 
-      if (!matchedDriver.isActive) {
+      final driver = DriverModel.fromJson(
+        Map<String, dynamic>.from(result['driver'] as Map),
+      );
+
+      if (!driver.isActive || driver.isDeleted) {
         setState(() {
-          _errorMessage = 'Tu cuenta de repartidor se encuentra inactiva. Contacta al administrador.';
+          _errorMessage = 'Usuario inactivo';
         });
         return;
       }
 
       // Guardar sesión persistente
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_driver_id', matchedDriver.id);
+      await prefs.setString('saved_driver_id', driver.id);
 
       if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => OrderPoolScreen(driver: matchedDriver!),
+            builder: (_) => OrderPoolScreen(driver: driver),
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Driver Login Error: $e');
+      debugPrint('$stack');
       setState(() {
-        _errorMessage = 'Error de conexión. Verifica tus credenciales e intenta nuevamente.';
+        _errorMessage = 'Error al iniciar sesión: ${e.toString().replaceAll("Exception: ", "")}';
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -254,9 +241,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        // Input Usuario / Teléfono
+                        // Input Teléfono
                         const Text(
-                          'Teléfono o Correo',
+                          'Teléfono',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -266,9 +253,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _identifierController,
-                          keyboardType: TextInputType.emailAddress,
+                          keyboardType: TextInputType.phone,
                           decoration: InputDecoration(
-                            hintText: 'Ej. 941000001 o correo',
+                            hintText: 'Ej. 941000001',
                             hintStyle: const TextStyle(color: AppColors.slate400, fontSize: 14),
                             prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.slate400, size: 20),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -289,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           validator: (val) {
                             if (val == null || val.trim().isEmpty) {
-                              return 'Por favor ingresa tu teléfono o usuario';
+                              return 'Por favor ingresa tu teléfono';
                             }
                             return null;
                           },
@@ -298,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         // Input Contraseña
                         const Text(
-                          'Contraseña / PIN',
+                          'Contraseña',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,

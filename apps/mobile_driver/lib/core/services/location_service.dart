@@ -167,11 +167,11 @@ class LocationService {
     try {
       await _supabase.from('driver_locations').upsert({
         'driver_id': driverId,
-        'restaurant_id': restaurantId,
+        'tenant_id': restaurantId,
         'current_order_id': currentOrderId,
         'current_lat': position.latitude,
         'current_lng': position.longitude,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {}
   }

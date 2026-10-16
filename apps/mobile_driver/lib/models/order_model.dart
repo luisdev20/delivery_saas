@@ -74,7 +74,7 @@ class OrderModel {
     var rawItems = json['order_items'] as List<dynamic>? ?? [];
     return OrderModel(
       id: (json['id'] as String?) ?? '',
-      restaurantId: (json['restaurant_id'] as String?) ?? '',
+      restaurantId: (json['tenant_id'] as String?) ?? (json['restaurant_id'] as String?) ?? '',
       driverId: json['driver_id'] as String?,
       orderNumber: (json['order_number'] as num?)?.toInt() ?? 0,
       customerName: (json['customer_name'] as String?) ?? 'Cliente',
