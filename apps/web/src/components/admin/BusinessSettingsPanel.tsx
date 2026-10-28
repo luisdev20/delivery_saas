@@ -110,7 +110,7 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
             <div className="relative">
               <Store size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                className="form-input pl-9"
+                className="form-input form-input-icon"
                 value={form.name}
                 onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                 maxLength={100}
@@ -128,7 +128,7 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
               <div className="relative">
                 <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  className="form-input pl-9"
+                  className="form-input form-input-icon"
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
@@ -149,7 +149,7 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
-                  className="form-input pl-9 font-mono"
+                  className="form-input form-input-icon font-mono"
                   inputMode="numeric"
                   value={form.ruc}
                   onChange={(e) =>
@@ -171,7 +171,7 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
             <div className="relative">
               <MapPin size={15} className="absolute left-3 top-3 text-slate-400" />
               <textarea
-                className="form-input pl-9"
+                className="form-input form-input-icon"
                 rows={2}
                 value={form.address}
                 onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}

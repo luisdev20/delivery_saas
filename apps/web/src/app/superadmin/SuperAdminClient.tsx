@@ -704,7 +704,7 @@ export default function SuperAdminClient({
                     <MapPin size={15} className="absolute left-3 top-3 text-slate-400" />
                     <input
                       type="text"
-                      className="form-input pl-9"
+                      className="form-input form-input-icon"
                       placeholder="ej. Av. Benavides 1240, Miraflores, Lima"
                       value={newMerchantAddress}
                       onChange={(e) => setNewMerchantAddress(e.target.value)}
