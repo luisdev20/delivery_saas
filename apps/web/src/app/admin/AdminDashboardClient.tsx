@@ -4,28 +4,42 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
-  Bell, Package, Truck, CheckCircle, Clock, XCircle,
+  Bell, Package, Truck, CheckCircle, XCircle,
   MapPin, Phone, User, CreditCard, MessageSquare,
   LogOut, Menu, BarChart2, X, Users, Store,
-  ShoppingBag, Timer, ArrowRight, Plus, Trash2, Loader2,
+  Timer, ArrowRight, Plus, Trash2, Loader2,
   TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
-  ShieldCheck, AlertTriangle, Boxes, PackageCheck, UserCheck,
-  Send, ExternalLink, PlusCircle, HelpCircle, Sparkles,
-  Search, RotateCcw, SlidersHorizontal, Filter, KeyRound,
+  ShieldCheck, AlertTriangle, Boxes, PackageCheck,
+  PlusCircle, Search, RotateCcw,
+  Receipt, Settings,
 } from 'lucide-react';
 import type {
   Order, Driver, Restaurant, OrderStatus, Subscription,
   MerchantApiKey, CancellationReason,
 } from '@/lib/supabase/types';
-import { PLAN_LIMITS, CANCELLATION_REASONS } from '@/lib/supabase/types';
+import { CANCELLATION_REASONS } from '@/lib/supabase/types';
+import {
+  getSubscriptionSnapshot,
+  type BillingTransaction,
+  type SubscriptionSnapshot,
+} from '@/lib/subscription';
+import PlanBadge from '@/components/admin/PlanBadge';
+import SubscriptionBanner from '@/components/admin/SubscriptionBanner';
+import OrderQuotaWidget from '@/components/admin/OrderQuotaWidget';
+import BillingPanel from '@/components/admin/BillingPanel';
+import BusinessSettingsPanel from '@/components/admin/BusinessSettingsPanel';
+import OperationalAccountsPanel from '@/components/admin/OperationalAccountsPanel';
 
 interface Props {
   restaurant: Restaurant;
   allRestaurants?: Restaurant[];
   drivers: Driver[];
   subscription: Subscription | null;
+  lastTransaction: BillingTransaction | null;
+  billingTransactions: BillingTransaction[];
   initialOrders?: Order[];
   userRole: string;
+  userEmail?: string | null;
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ReactNode; next: OrderStatus | null }> = {
@@ -46,7 +60,7 @@ const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
   CANCELADO:      '',
 };
 
-type AdminTab = 'dashboard' | 'fleet' | 'api_keys' | 'metrics';
+type AdminTab = 'dashboard' | 'fleet' | 'api_keys' | 'metrics' | 'billing' | 'settings';
 type FilterTab = 'active' | 'delivered' | 'all';
 type MetricsRange = 'today' | '7days' | 'month' | 'last_month';
 type CodeTab = 'curl' | 'js' | 'python';
@@ -69,9 +83,12 @@ export default function AdminDashboardClient({
   restaurant,
   allRestaurants = [],
   drivers: initialDrivers,
-  subscription,
+  subscription: initialSubscription,
+  lastTransaction: initialLastTransaction,
+  billingTransactions: initialBillingTransactions,
   initialOrders = [],
   userRole,
+  userEmail,
 }: Props) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
@@ -83,6 +100,17 @@ export default function AdminDashboardClient({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trackingDrawerOrder, setTrackingDrawerOrder] = useState<Order | null>(null);
 
+  // Suscripción y facturación
+  const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(
+    initialSubscription
+  );
+  const [lastTransaction, setLastTransaction] = useState<BillingTransaction | null>(
+    initialLastTransaction
+  );
+  const [billingHistory, setBillingHistory] = useState<BillingTransaction[]>(
+    initialBillingTransactions
+  );
+
   // Logistics Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDriver, setFilterDriver] = useState('all');
@@ -93,17 +121,48 @@ export default function AdminDashboardClient({
   const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant>(restaurant);
   const [togglingOpen, setTogglingOpen] = useState(false);
 
-  // Driver modal
-  const [showDriverModal, setShowDriverModal] = useState(false);
-  const [newDriverName, setNewDriverName] = useState('');
-  const [newDriverPhone, setNewDriverPhone] = useState('');
-  const [newDriverPassword, setNewDriverPassword] = useState('');
-  const [savingDriver, setSavingDriver] = useState(false);
+  // Estado contractual derivado (sidebar, guard global y cuota)
+  const snapshot: SubscriptionSnapshot = useMemo(
+    () => getSubscriptionSnapshot(currentSubscription, lastTransaction),
+    [currentSubscription, lastTransaction]
+  );
+  const activeDriverCount = useMemo(
+    () => drivers.filter((driver) => driver.is_active && !driver.deleted_at).length,
+    [drivers]
+  );
+  const readOnly = snapshot.readOnly;
+  const canCreateOrders = !snapshot.readOnly && !snapshot.quotaReached;
 
-  // Reset de contraseña de repartidor
-  const [passwordModalDriver, setPasswordModalDriver] = useState<Driver | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
+  const handleDriversChanged = useCallback((nextDrivers: Driver[]) => {
+    setDrivers(nextDrivers);
+  }, []);
+
+  const handleSubscriptionUpdated = useCallback(
+    (nextSubscription: Subscription, transaction: BillingTransaction) => {
+      setCurrentSubscription(nextSubscription);
+      setLastTransaction(transaction);
+      setBillingHistory((prev) => [transaction, ...prev]);
+    },
+    []
+  );
+
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/admin/subscription?tenantId=${encodeURIComponent(restaurant.id)}`,
+        { cache: 'no-store' }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.subscription) setCurrentSubscription(data.subscription as Subscription);
+      if (data.transactions?.length) {
+        setBillingHistory(data.transactions as BillingTransaction[]);
+        setLastTransaction(data.transactions[0] as BillingTransaction);
+      }
+    } catch {
+      // La UI conserva el último estado conocido; no se bloquea al usuario.
+    }
+  }, [restaurant.id]);
 
   // Manual Dispatch Modal
   const [showManualModal, setShowManualModal] = useState(false);
@@ -206,6 +265,8 @@ export default function AdminDashboardClient({
   }, [restaurant.id, supabase]);
 
   useEffect(() => {
+    // Carga inicial de datos del panel desde Supabase.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
     loadDrivers();
     loadApiKeys();
@@ -392,25 +453,36 @@ export default function AdminDashboardClient({
   };
 
   const assignDriver = async (orderId: string, driverId: string) => {
-    const targetOrder = orders.find(o => o.id === orderId);
-    const shouldAdvance = targetOrder?.status === 'RECIBIDO' || targetOrder?.status === 'EN_PREPARACION';
-    const nextStatus: OrderStatus = shouldAdvance ? 'LISTO' : (targetOrder?.status || 'LISTO');
+    if (readOnly) {
+      toast.error('Suscripción vencida: no se pueden asignar motorizados. Renueva tu plan.');
+      return;
+    }
 
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        driver_id: driverId,
-        status: nextStatus,
-        assigned_at: new Date().toISOString(),
-      })
-      .eq('id', orderId);
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) return;
 
-    if (!error) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, status: nextStatus, assigned_at: new Date().toISOString() } : o));
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'assign_driver',
+          tenantId: restaurant.id,
+          orderId,
+          driverId,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo asignar el repartidor.');
+
+      const updated = data.order as Order;
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
       if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => prev ? { ...prev, driver_id: driverId, status: nextStatus } : null);
+        setSelectedOrder((prev) => (prev ? { ...prev, ...updated } : null));
       }
       toast.success('Repartidor asignado correctamente');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo asignar el repartidor.');
     }
   };
 
@@ -426,172 +498,71 @@ export default function AdminDashboardClient({
   // Create Manual Dispatch Order
   const handleCreateManualDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (readOnly) {
+      toast.error('Suscripción vencida: el panel está en modo solo lectura. Renueva tu plan.');
+      return;
+    }
+    if (snapshot.quotaReached) {
+      toast.error('Límite de pedidos alcanzado para el ciclo actual. Amplía tu plan para continuar.');
+      return;
+    }
     if (!manualForm.customer_name || !manualForm.customer_phone || !manualForm.delivery_address) {
       toast.error('Nombre, teléfono y dirección son obligatorios');
       return;
     }
 
     setCreatingManual(true);
-    const pinCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const defaultLat = restaurant.lat || -12.0464;
-    const defaultLng = restaurant.lng || -77.0428;
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: restaurant.id,
+          customerName: manualForm.customer_name,
+          customerPhone: manualForm.customer_phone,
+          deliveryAddress: manualForm.delivery_address,
+          deliveryReference: manualForm.delivery_reference,
+          itemDescription: manualForm.item_description,
+          totalAmount: manualForm.total_amount,
+          notes: manualForm.notes,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo registrar el despacho manual.');
 
-    const totalAmount = parseFloat(manualForm.total_amount) || 0;
-    const itemDesc = manualForm.item_description.trim() || 'Paquete para despacho';
-
-    const { data: newOrder, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        tenant_id: restaurant.id,
-        origin_system: 'MANUAL_DISPATCH',
-        pin_code: pinCode,
-        customer_name: manualForm.customer_name.trim(),
-        customer_phone: manualForm.customer_phone.trim(),
-        delivery_address: manualForm.delivery_address.trim(),
-        delivery_reference: manualForm.delivery_reference.trim() || null,
-        delivery_lat: defaultLat,
-        delivery_lng: defaultLng,
-        status: 'RECIBIDO',
-        total_amount: totalAmount,
-        package_notes: itemDesc,
-        notes: manualForm.notes.trim() || null,
-      })
-      .select()
-      .single();
-
-    if (orderError || !newOrder) {
-      toast.error('Error al registrar el despacho manual');
+      const newOrder = data.order as Order;
+      setOrders((prev) => [newOrder, ...prev]);
+      toast.success(
+        `Despacho #${newOrder.order_number} creado con éxito. PIN: ${newOrder.pin_code}`
+      );
+      setShowManualModal(false);
+      setManualForm({
+        customer_name: '',
+        customer_phone: '',
+        delivery_address: '',
+        delivery_reference: '',
+        item_description: '',
+        total_amount: '',
+        notes: '',
+      });
+      await refreshSubscription();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Error al registrar el despacho manual.'
+      );
+    } finally {
       setCreatingManual(false);
-      return;
     }
-
-    setOrders(prev => [newOrder as Order, ...prev]);
-    toast.success(`Despacho #${newOrder.order_number} creado con éxito. PIN: ${pinCode}`);
-    setShowManualModal(false);
-    setManualForm({
-      customer_name: '',
-      customer_phone: '',
-      delivery_address: '',
-      delivery_reference: '',
-      item_description: '',
-      total_amount: '',
-      notes: '',
-    });
-    setCreatingManual(false);
-  };
-
-  // Drivers Management
-  const handleCreateDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDriverName || !newDriverPhone) {
-      toast.error('Nombre y teléfono son obligatorios');
-      return;
-    }
-    if (newDriverPassword.trim().length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
-    if (subscription) {
-      const activeDriverCount = drivers.filter(d => d.is_active).length;
-      if (activeDriverCount >= subscription.max_drivers) {
-        const planLabel = PLAN_LIMITS[subscription.plan]?.label || subscription.plan;
-        toast.error(`Plan ${planLabel}: Máximo ${subscription.max_drivers} repartidores activos. Actualice su plan para agregar más.`);
-        return;
-      }
-    }
-    setSavingDriver(true);
-    const { data, error } = await supabase
-      .from('drivers')
-      .insert({
-        tenant_id: restaurant.id,
-        name: newDriverName,
-        phone: newDriverPhone,
-        is_active: true,
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      toast.error('Error al registrar repartidor');
-      setSavingDriver(false);
-      return;
-    }
-
-    // Asignar su contraseña de acceso (se guarda hasheada en el servidor vía RPC)
-    const { data: pwData } = await supabase.rpc('set_driver_password', {
-      p_driver_id: data.id,
-      p_password: newDriverPassword.trim(),
-    });
-    const pwRes = (pwData || null) as { success?: boolean; error?: string } | null;
-
-    setDrivers(prev => [...prev, data as Driver]);
-    if (pwRes?.success) {
-      toast.success(`Repartidor ${data.name} registrado con su contraseña`);
-    } else {
-      toast.error(`Repartidor ${data.name} creado, pero no se pudo asignar la contraseña. Usa "Contraseña" para restablecerla.`);
-    }
-    setShowDriverModal(false);
-    setNewDriverName('');
-    setNewDriverPhone('');
-    setNewDriverPassword('');
-    setSavingDriver(false);
-  };
-
-  const handleToggleDriver = async (driver: Driver) => {
-    const newVal = !driver.is_active;
-    const { error } = await supabase
-      .from('drivers')
-      .update({ is_active: newVal })
-      .eq('id', driver.id);
-    if (!error) {
-      setDrivers(prev => prev.map(d => d.id === driver.id ? { ...d, is_active: newVal } : d));
-      toast.success(newVal ? `${driver.name} activado` : `${driver.name} desactivado`);
-    }
-  };
-
-  const handleDeleteDriver = async (driver: Driver) => {
-    if (!confirm(`¿Dar de baja a "${driver.name}"?\n\nSe eliminarán su teléfono y su acceso de login. Su historial de entregas se conservará. Esta acción no se puede deshacer.`)) return;
-    const { data, error } = await supabase.rpc('soft_delete_driver', { p_driver_id: driver.id });
-    const res = (data || null) as { success?: boolean; error?: string; released_orders?: number } | null;
-    if (error || !res?.success) {
-      toast.error(res?.error || error?.message || 'No se pudo dar de baja al repartidor');
-      return;
-    }
-    setDrivers(prev => prev.filter(d => d.id !== driver.id));
-    const released = res.released_orders ?? 0;
-    toast.success(
-      released > 0
-        ? `${driver.name} dado de baja · ${released} pedido(s) en curso liberado(s)`
-        : `${driver.name} dado de baja`
-    );
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passwordModalDriver) return;
-    if (newPassword.trim().length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
-    setSavingPassword(true);
-    const { data, error } = await supabase.rpc('set_driver_password', {
-      p_driver_id: passwordModalDriver.id,
-      p_password: newPassword.trim(),
-    });
-    const res = (data || null) as { success?: boolean; error?: string } | null;
-    if (error || !res?.success) {
-      toast.error(res?.error || error?.message || 'No se pudo actualizar la contraseña');
-    } else {
-      toast.success(`Contraseña actualizada para ${passwordModalDriver.name}`);
-      setPasswordModalDriver(null);
-      setNewPassword('');
-    }
-    setSavingPassword(false);
   };
 
   // API Keys Management
   const handleGenerateApiKey = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) {
+      toast.error('Suscripción vencida: renueva tu plan para generar nuevas claves API.');
+      return;
+    }
     setGeneratingKey(true);
     try {
       const res = await fetch('/api/v1/keys', {
@@ -684,6 +655,8 @@ export default function AdminDashboardClient({
 
   useEffect(() => {
     if (adminTab === 'metrics') {
+      // Carga perezosa de métricas al abrir la pestaña.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadMetricsOrders(metricsRange);
       loadDriverHistory();
     }
@@ -895,9 +868,11 @@ export default function AdminDashboardClient({
 
   const sidebarNavItems: SidebarNavItem[] = [
     { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Monitor de Despachos', badge: activeCount },
-    { id: 'fleet',     icon: <Users size={18} />,     label: 'Gestión de Flota', badge: drivers.filter(d => d.is_active).length },
+    { id: 'fleet',     icon: <Users size={18} />,     label: 'Personal Operativo', badge: activeDriverCount },
     { id: 'api_keys',  icon: <Key size={18} />,       label: 'Integración API B2B', badge: apiKeys.filter(k => k.is_active).length },
     { id: 'metrics',   icon: <TrendingUp size={18} />, label: 'Métricas' },
+    { id: 'billing',   icon: <Receipt size={18} />,   label: 'Suscripción y Facturación' },
+    { id: 'settings',  icon: <Settings size={18} />,  label: 'Configuración del Negocio' },
   ];
 
   return (
@@ -1009,6 +984,24 @@ export default function AdminDashboardClient({
           )}
         </nav>
 
+        {/* Perfil del usuario + Plan actual */}
+        <div className="px-4 pb-3 pt-3 border-t border-indigo-800/60 space-y-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-indigo-600/80 border border-indigo-400/30 flex items-center justify-center text-xs font-black text-white shrink-0">
+              {(userEmail || currentRestaurant.name).charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-white truncate" title={userEmail || undefined}>
+                {userEmail || 'Usuario del comercio'}
+              </p>
+              <p className="text-[10px] text-indigo-300 capitalize">
+                {userRole === 'superadmin' ? 'Superadmin' : userRole}
+              </p>
+            </div>
+          </div>
+          <PlanBadge snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
+        </div>
+
         {/* Store Status Toggle */}
         <div className="p-4 border-t border-indigo-800/60 bg-indigo-950/40">
           <div className="flex items-center justify-between mb-2">
@@ -1068,6 +1061,9 @@ export default function AdminDashboardClient({
           </button>
         </header>
 
+        {/* Guard global de suscripción / cuota (persistente en todas las vistas) */}
+        <SubscriptionBanner snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
+
         {/* ================= TAB 1: DASHBOARD (DESPACHOS) ================= */}
         {adminTab === 'dashboard' && (
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
@@ -1087,17 +1083,44 @@ export default function AdminDashboardClient({
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowManualModal(true)}
-                  className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5"
+                  disabled={!canCreateOrders}
+                  title={
+                    readOnly
+                      ? 'Suscripción vencida: renueva tu plan para crear pedidos'
+                      : snapshot.quotaReached
+                        ? 'Límite de pedidos alcanzado para el ciclo actual'
+                        : undefined
+                  }
+                  className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   id="btn-new-manual-dispatch"
                 >
                   <PlusCircle size={16} /> + Nuevo Despacho
                 </button>
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
-                  Sistema Activo
+                <div
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                    readOnly
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : snapshot.quotaReached
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      readOnly
+                        ? 'bg-rose-500'
+                        : snapshot.quotaReached
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500 pulse-dot'
+                    }`}
+                  />
+                  {readOnly ? 'Solo lectura' : snapshot.quotaReached ? 'Cuota agotada' : 'Sistema Activo'}
                 </div>
               </div>
             </header>
+
+            {/* Medidor de cuota mensual */}
+            <OrderQuotaWidget snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
 
             {/* Stat Cards */}
             <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-4 sm:mb-8">
@@ -1470,85 +1493,16 @@ export default function AdminDashboardClient({
           </div>
         )}
 
-        {/* ================= TAB 2: FLEET (FLOTA) ================= */}
+        {/* ================= TAB 2: PERSONAL OPERATIVO (REPARTIDORES + KDS) ================= */}
         {adminTab === 'fleet' && (
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            <header className="flex justify-between items-center mb-6">
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                    {currentRestaurant.name}
-                  </h2>
-                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Gestión de Flota
-                  </span>
-                </div>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control de repartidores y disponibilidad en tiempo real</p>
-              </div>
-              <button
-                onClick={() => setShowDriverModal(true)}
-                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm"
-              >
-                + Nuevo Repartidor
-              </button>
-            </header>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {drivers.filter(d => !d.deleted_at).map(driver => (
-                <div key={driver.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-600 text-base">
-                        {driver.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-sm">{driver.name}</h4>
-                        <a href={`tel:${driver.phone}`} className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 mt-0.5">
-                          <Phone size={12} /> {driver.phone}
-                        </a>
-                      </div>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${driver.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
-                      {driver.is_active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleToggleDriver(driver)}
-                      className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
-                        driver.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                      }`}
-                    >
-                      {driver.is_active ? 'Desactivar' : 'Activar'}
-                    </button>
-                    <a
-                      href={`https://wa.me/51${driver.phone.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Escribir por WhatsApp"
-                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <MessageSquare size={13} /> WhatsApp
-                    </a>
-                    <button
-                      onClick={() => { setPasswordModalDriver(driver); setNewPassword(''); }}
-                      title="Asignar / restablecer la contraseña de acceso del repartidor"
-                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <KeyRound size={13} /> Contraseña
-                    </button>
-                    <button
-                      onClick={() => handleDeleteDriver(driver)}
-                      title="Dar de baja (elimina su acceso y conserva su historial de entregas)"
-                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Trash2 size={13} /> Baja
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <OperationalAccountsPanel
+              tenantId={restaurant.id}
+              initialDrivers={drivers}
+              snapshot={snapshot}
+              onDriversChanged={handleDriversChanged}
+              onOpenBilling={() => setAdminTab('billing')}
+            />
           </div>
         )}
 
@@ -1569,7 +1523,13 @@ export default function AdminDashboardClient({
               </div>
               <button
                 onClick={() => setShowNewKeyModal(true)}
-                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5"
+                disabled={readOnly}
+                title={
+                  readOnly
+                    ? 'Suscripción vencida: renueva tu plan para generar nuevas claves'
+                    : undefined
+                }
+                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={16} /> Generar Clave API
               </button>
@@ -1913,28 +1873,32 @@ print(response.json())`}</pre>
             </div>
 
             {/* Driver performance & Plan summary */}
-            {subscription && (
+            {currentSubscription && (
               <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-sm text-slate-700">Consumo del Plan de Servicio</h3>
-                  <span className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
-                    subscription.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
-                    subscription.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
-                    'bg-indigo-100 text-indigo-700'
-                  }`}>{PLAN_LIMITS[subscription.plan]?.label || subscription.plan}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab('billing')}
+                    className={`text-xs font-black tracking-wider px-2.5 py-1 rounded-lg ${
+                      snapshot.plan === 'ENTERPRISE' ? 'bg-amber-100 text-amber-700' :
+                      snapshot.plan === 'GROWTH' ? 'bg-emerald-100 text-emerald-700' :
+                      'bg-indigo-100 text-indigo-700'
+                    }`}
+                  >{snapshot.planLabel}</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-500">Despachos este mes</span>
-                      <span className="font-bold text-slate-700">{subscription.orders_this_month} / {subscription.max_orders_per_month === 999999 ? 'Ilimitados' : subscription.max_orders_per_month}</span>
+                      <span className="font-bold text-slate-700">{snapshot.ordersThisMonth} / {snapshot.maxOrders.toLocaleString('es-PE')}</span>
                     </div>
                     <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{
-                          width: `${Math.min((subscription.orders_this_month / subscription.max_orders_per_month) * 100, 100)}%`,
-                          backgroundColor: (subscription.orders_this_month / subscription.max_orders_per_month) > 0.9 ? '#DC2626' : '#4F46E5',
+                          width: `${Math.min(snapshot.usagePercent, 100)}%`,
+                          backgroundColor: snapshot.quotaState === 'exhausted' ? '#DC2626' : snapshot.quotaState === 'warning' ? '#D97706' : '#4F46E5',
                         }}
                       />
                     </div>
@@ -1942,14 +1906,14 @@ print(response.json())`}</pre>
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-500">Repartidores activos</span>
-                      <span className="font-bold text-slate-700">{drivers.filter(d => d.is_active).length} / {subscription.max_drivers >= 999 ? 'Ilimitados' : subscription.max_drivers}</span>
+                      <span className="font-bold text-slate-700">{activeDriverCount} / {snapshot.maxDrivers}</span>
                     </div>
                     <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{
-                          width: `${Math.min((drivers.filter(d => d.is_active).length / subscription.max_drivers) * 100, 100)}%`,
-                          backgroundColor: '#4F46E5',
+                          width: `${Math.min((activeDriverCount / Math.max(1, snapshot.maxDrivers)) * 100, 100)}%`,
+                          backgroundColor: activeDriverCount > snapshot.maxDrivers ? '#DC2626' : '#4F46E5',
                         }}
                       />
                     </div>
@@ -1957,6 +1921,30 @@ print(response.json())`}</pre>
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= TAB 5: SUSCRIPCIÓN Y FACTURACIÓN ================= */}
+        {adminTab === 'billing' && (
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <BillingPanel
+              tenant={currentRestaurant}
+              subscription={currentSubscription}
+              snapshot={snapshot}
+              transactions={billingHistory}
+              onSubscriptionUpdated={handleSubscriptionUpdated}
+            />
+          </div>
+        )}
+
+        {/* ================= TAB 6: CONFIGURACIÓN DEL NEGOCIO ================= */}
+        {adminTab === 'settings' && (
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
+            <BusinessSettingsPanel
+              key={currentRestaurant.id}
+              tenant={currentRestaurant}
+              onUpdated={(nextTenant) => setCurrentRestaurant(nextTenant)}
+            />
           </div>
         )}
 
@@ -2064,8 +2052,8 @@ print(response.json())`}</pre>
                 </button>
                 <button
                   type="submit"
-                  disabled={creatingManual}
-                  className="btn btn-indigo flex-1"
+                  disabled={creatingManual || !canCreateOrders}
+                  className="btn btn-indigo flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {creatingManual ? 'Creando...' : 'Crear Despacho'}
                 </button>
@@ -2267,122 +2255,6 @@ print(response.json())`}</pre>
         </div>
       )}
 
-      {/* ================= MODAL: NUEVO REPARTIDOR ================= */}
-      {showDriverModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base sm:text-lg font-bold text-slate-800">Registrar Repartidor</h3>
-              <button onClick={() => setShowDriverModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateDriver} className="space-y-3 sm:space-y-4">
-              <div className="form-group">
-                <label className="form-label">Nombre Completo</label>
-                <input
-                  className="form-input"
-                  placeholder="Ej. Carlos Rodríguez"
-                  value={newDriverName}
-                  onChange={e => setNewDriverName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">WhatsApp / Teléfono</label>
-                <input
-                  className="form-input"
-                  type="tel"
-                  placeholder="Ej. 987654321"
-                  value={newDriverPhone}
-                  onChange={e => setNewDriverPhone(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Contraseña de acceso</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Mínimo 6 caracteres"
-                  value={newDriverPassword}
-                  onChange={e => setNewDriverPassword(e.target.value)}
-                  minLength={6}
-                  required
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  El repartidor ingresa con su teléfono y esta contraseña en la app.
-                </p>
-              </div>
-              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowDriverModal(false)}
-                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingDriver}
-                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
-                >
-                  {savingDriver ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: RESTABLECER CONTRASEÑA ================= */}
-      {passwordModalDriver && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base sm:text-lg font-bold text-slate-800">Contraseña de {passwordModalDriver.name}</h3>
-              <button onClick={() => setPasswordModalDriver(null)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleResetPassword} className="space-y-3 sm:space-y-4">
-              <div className="form-group">
-                <label className="form-label">Nueva contraseña</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Mínimo 6 caracteres"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  minLength={6}
-                  required
-                  autoFocus
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Se guarda cifrada. El repartidor la usará junto a su teléfono {passwordModalDriver.phone || '(sin teléfono)'} en la app.
-                </p>
-              </div>
-              <div className="flex gap-2 sm:gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setPasswordModalDriver(null)}
-                  className="btn btn-secondary flex-1 text-xs sm:text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingPassword}
-                  className="btn btn-indigo flex-1 text-xs sm:text-sm"
-                >
-                  {savingPassword ? 'Guardando...' : 'Guardar contraseña'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ================= ORDER DETAIL DRAWER ================= */}
       {selectedOrder && (
         <>
@@ -2463,12 +2335,17 @@ print(response.json())`}</pre>
               {!['ENTREGADO', 'CANCELADO'].includes(selectedOrder.status) && (
                 <div className="space-y-3">
                   <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Asignar Repartidor</h4>
+                  {readOnly && (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+                      Suscripción vencida: la asignación está bloqueada. Puedes finalizar pedidos en curso.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 gap-2">
                     {drivers.filter(d => !d.deleted_at).map(d => (
                       <button
                         key={d.id}
                         onClick={() => assignDriver(selectedOrder.id, d.id)}
-                        disabled={!d.is_active}
+                        disabled={!d.is_active || readOnly}
                         className={`p-3 rounded-lg border text-left transition-all flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed ${
                           selectedOrder.driver_id === d.id
                             ? 'border-indigo-600 bg-indigo-50 font-semibold'

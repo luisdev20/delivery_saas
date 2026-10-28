@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateApiKey, generatePinCode } from '@/lib/auth/apiKey';
+import { loadSubscriptionState } from '@/lib/server/subscription';
+import {
+  expiredSubscriptionMessage,
+  quotaReachedMessage,
+} from '@/lib/subscription';
 import type { PaymentMethod } from '@/lib/supabase/types';
 
 function getSupabaseClient() {
@@ -85,6 +90,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Comercio no encontrado o inactivo.' }, { status: 404 });
     }
 
+    if (merchant.is_open === false) {
+      return NextResponse.json(
+        {
+          error: 'Comercio pausado',
+          message:
+            'El comercio pausó temporalmente la recepción de pedidos. Reintenta cuando vuelva a abrir.',
+        },
+        { status: 409 }
+      );
+    }
+
+    // Guard global de suscripción: vencimiento + cuota mensual.
+    const subscriptionState = await loadSubscriptionState(supabase, auth.restaurantId);
+
+    if (!subscriptionState.subscription || subscriptionState.snapshot.readOnly) {
+      return NextResponse.json(
+        {
+          error: 'Suscripción inactiva',
+          message: expiredSubscriptionMessage(subscriptionState.snapshot.planLabel),
+        },
+        { status: 403 }
+      );
+    }
+
+    if (subscriptionState.snapshot.quotaReached) {
+      return NextResponse.json(
+        {
+          error: 'Límite de envíos mensuales alcanzado',
+          message: quotaReachedMessage(
+            subscriptionState.snapshot.planLabel,
+            subscriptionState.snapshot.maxOrders
+          ),
+        },
+        { status: 429 }
+      );
+    }
+
     const maxRadius = Number(merchant.max_delivery_radius_km) || 12.0;
 
     // Validar radio máximo de delivery
@@ -101,24 +143,6 @@ export async function POST(req: Request) {
           { status: 422 }
         );
       }
-    }
-
-    // Validar cuota mensual de suscripción
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('id, max_orders_per_month, orders_this_month, is_active')
-      .eq('tenant_id', auth.restaurantId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (subscription && subscription.orders_this_month >= subscription.max_orders_per_month) {
-      return NextResponse.json(
-        {
-          error: 'Límite de envíos mensuales alcanzado',
-          message: 'Ha alcanzado el límite de pedidos permitidos para su plan actual. Actualice su suscripción para continuar despachando.',
-        },
-        { status: 429 }
-      );
     }
 
     // Calcular total y estructurar ítems
@@ -176,11 +200,11 @@ export async function POST(req: Request) {
     }
 
     // Incrementar contador de órdenes del mes
-    if (subscription) {
+    if (subscriptionState.subscription) {
       await supabase
         .from('subscriptions')
-        .update({ orders_this_month: subscription.orders_this_month + 1 })
-        .eq('id', subscription.id);
+        .update({ orders_this_month: subscriptionState.snapshot.ordersThisMonth + 1 })
+        .eq('id', subscriptionState.subscription.id);
     }
 
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
