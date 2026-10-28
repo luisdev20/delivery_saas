@@ -71,6 +71,9 @@ html, body {
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.form-input-icon {
+  padding-left: 2.25rem;
+}
 .form-input:focus {
   border-color: #4F46E5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);

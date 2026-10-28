@@ -497,9 +497,9 @@ export default function SuperAdminClient({
                     <th className="py-3.5 px-4 font-bold">Comercio</th>
                     <th className="py-3.5 px-4 font-bold">Identificador</th>
                     <th className="py-3.5 px-4 font-bold">Dirección Central &bull; Cobertura</th>
-                    <th className="py-3.5 px-4 font-bold">Plan Activo</th>
+                    <th className="py-3.5 px-4 font-bold">Plan</th>
                     <th className="py-3.5 px-4 font-bold">Cuota de Envíos</th>
-                    <th className="py-3.5 px-4 font-bold">Estado del Servicio</th>
+                    <th className="py-3.5 px-4 font-bold">Servicio</th>
                     <th className="py-3.5 px-4 font-bold text-right">Configuración</th>
                   </tr>
                 </thead>
@@ -553,13 +553,14 @@ export default function SuperAdminClient({
                           <button
                             onClick={() => handleToggleMerchantStatus(merchant)}
                             disabled={updatingId === merchant.id}
+                            title={merchant.is_open ? 'Suspender comercio' : 'Activar comercio'}
                             className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
                               merchant.is_open
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                             }`}
                           >
-                            {merchant.is_open ? '● Activo' : '○ Suspendido'}
+                            {merchant.is_open ? 'Suspender' : 'Activar'}
                           </button>
                         </td>
                         <td className="py-4 px-4 text-right">
@@ -703,7 +704,7 @@ export default function SuperAdminClient({
                     <MapPin size={15} className="absolute left-3 top-3 text-slate-400" />
                     <input
                       type="text"
-                      className="form-input pl-9"
+                      className="form-input form-input-icon"
                       placeholder="ej. Av. Benavides 1240, Miraflores, Lima"
                       value={newMerchantAddress}
                       onChange={(e) => setNewMerchantAddress(e.target.value)}

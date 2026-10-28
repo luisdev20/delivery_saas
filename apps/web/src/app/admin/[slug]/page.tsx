@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getSessionContext } from '@/lib/auth/session';
+import { loadSubscriptionState } from '@/lib/server/subscription';
+import type { BillingTransaction } from '@/lib/subscription';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import AdminDashboardClient from '../AdminDashboardClient';
@@ -58,7 +61,9 @@ export default async function AdminMerchantPage({ params }: Props) {
     .select('*')
     .order('created_at', { ascending: true });
 
-  const restaurant = allRestaurants?.find(r => r.slug === slug || r.id === slug) as Restaurant | null;
+  const restaurant = allRestaurants?.find((r) => r.slug === slug || r.id === slug) as
+    | Restaurant
+    | null;
 
   if (!restaurant) notFound();
 
@@ -68,14 +73,6 @@ export default async function AdminMerchantPage({ params }: Props) {
     .select('*')
     .eq('tenant_id', restaurant.id);
 
-  // Cargar suscripción activa
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('*')
-    .eq('tenant_id', restaurant.id)
-    .eq('is_active', true)
-    .maybeSingle();
-
   // Cargar órdenes recientes del comercio
   const { data: initialOrders } = await supabase
     .from('orders')
@@ -84,14 +81,41 @@ export default async function AdminMerchantPage({ params }: Props) {
     .order('created_at', { ascending: false })
     .limit(100);
 
+  // La suscripción y la auditoría financiera se leen con service_role:
+  // billing_transactions no expone sus comprobantes a usuarios finales.
+  let subscription: Subscription | null = null;
+  let lastTransaction: BillingTransaction | null = null;
+  let billingTransactions: BillingTransaction[] = [];
+
+  try {
+    const admin = createAdminClient();
+    const state = await loadSubscriptionState(admin, restaurant.id);
+    subscription = state.subscription;
+    lastTransaction = state.lastTransaction;
+
+    const { data: transactions } = await admin
+      .from('billing_transactions')
+      .select('*')
+      .eq('tenant_id', restaurant.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    billingTransactions = (transactions ?? []) as BillingTransaction[];
+  } catch (error) {
+    console.error('No se pudo cargar la suscripción del comercio:', error);
+  }
+
   return (
     <AdminDashboardClient
       restaurant={restaurant}
-      allRestaurants={userRole === 'superadmin' ? ((allRestaurants as Restaurant[]) || []) : []}
+      allRestaurants={userRole === 'superadmin' ? (allRestaurants as Restaurant[]) || [] : []}
       drivers={(drivers as Driver[]) || []}
-      subscription={subscription as Subscription | null}
+      subscription={subscription}
+      lastTransaction={lastTransaction}
+      billingTransactions={billingTransactions}
       initialOrders={(initialOrders as Order[]) || []}
       userRole={userRole}
+      userEmail={session.email}
     />
   );
 }

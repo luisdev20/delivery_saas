@@ -1,29 +1,42 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireTenantAccess } from '@/lib/auth/tenantAccess';
 import { generateApiKey } from '@/lib/auth/apiKey';
 
-// GET /api/v1/keys - Listar API keys del comercio autenticado
-export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
+const SAFE_KEY_FIELDS = 'id, name, key_prefix, is_active, last_used_at, created_at';
+
+function requestedTenantId(req: Request): string | null {
+  return new URL(req.url).searchParams.get('tenantId');
+}
+
+async function authorize(req: Request) {
+  const access = await requireTenantAccess(requestedTenantId(req));
+  if (!access.ok) {
+    return {
+      error: NextResponse.json({ error: access.error }, { status: access.status }),
+    } as const;
   }
 
-  const { data: restUser } = await supabase
-    .from('tenant_users')
-    .select('tenant_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (!restUser) {
-    return NextResponse.json({ error: 'Comercio no asociado.' }, { status: 404 });
+  if (access.role !== 'owner' && access.role !== 'superadmin') {
+    return {
+      error: NextResponse.json(
+        { error: 'Solo el owner del comercio puede administrar claves API.' },
+        { status: 403 }
+      ),
+    } as const;
   }
 
-  const { data: keys, error } = await supabase
+  return { access } as const;
+}
+
+// GET /api/v1/keys - Listar claves del comercio (solo owner/superadmin)
+export async function GET(req: Request) {
+  const auth = await authorize(req);
+  if ('error' in auth) return auth.error;
+
+  const { data: keys, error } = await auth.access.supabase
     .from('tenant_api_keys')
-    .select('id, name, key_prefix, is_active, last_used_at, created_at')
-    .eq('tenant_id', restUser.tenant_id)
+    .select(SAFE_KEY_FIELDS)
+    .eq('tenant_id', auth.access.tenantId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -33,40 +46,27 @@ export async function GET() {
   return NextResponse.json({ success: true, keys: keys || [] });
 }
 
-// POST /api/v1/keys - Generar una nueva API Key para el comercio
+// POST /api/v1/keys - Generar una nueva API Key (solo owner/superadmin)
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
-  }
-
-  const { data: restUser } = await supabase
-    .from('tenant_users')
-    .select('tenant_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (!restUser) {
-    return NextResponse.json({ error: 'Comercio no asociado.' }, { status: 404 });
-  }
+  const auth = await authorize(req);
+  if ('error' in auth) return auth.error;
 
   try {
     const body = await req.json().catch(() => ({}));
-    const keyName = body.name?.trim() || 'Clave API Producción';
+    const keyName = String(body.name || '').trim().slice(0, 100) || 'Integración producción';
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
 
-    const { data: keyRecord, error } = await supabase
+    const { data: keyRecord, error } = await auth.access.supabase
       .from('tenant_api_keys')
       .insert({
-        tenant_id: restUser.tenant_id,
+        tenant_id: auth.access.tenantId,
         name: keyName,
         key_hash: keyHash,
         key_prefix: keyPrefix,
         is_active: true,
       })
-      .select('id, name, key_prefix, is_active, created_at')
+      .select(SAFE_KEY_FIELDS)
       .single();
 
     if (error || !keyRecord) {
@@ -75,11 +75,71 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      raw_key: rawKey, // Se muestra solo una vez
+      raw_key: rawKey,
       key: keyRecord,
-      message: 'Clave API generada con éxito. Guarde este token de forma segura, no volverá a mostrarse completo.',
+      message:
+        'Clave API generada con éxito. Guárdala de forma segura, no volverá a mostrarse completa.',
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Error interno al generar clave.' }, { status: 500 });
   }
+}
+
+// PATCH /api/v1/keys - Activar o pausar una clave (solo owner/superadmin)
+export async function PATCH(req: Request) {
+  const auth = await authorize(req);
+  if ('error' in auth) return auth.error;
+
+  const body = await req.json().catch(() => ({}));
+  if (typeof body.id !== 'string' || typeof body.isActive !== 'boolean') {
+    return NextResponse.json(
+      { error: 'Se requiere el id de la clave y el estado isActive.' },
+      { status: 400 }
+    );
+  }
+
+  const { data: key, error } = await auth.access.supabase
+    .from('tenant_api_keys')
+    .update({ is_active: body.isActive })
+    .eq('id', body.id)
+    .eq('tenant_id', auth.access.tenantId)
+    .select(SAFE_KEY_FIELDS)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: 'Error al actualizar la clave.' }, { status: 500 });
+  }
+  if (!key) {
+    return NextResponse.json({ error: 'Clave no encontrada.' }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true, key });
+}
+
+// DELETE /api/v1/keys?id=... - Revocar una clave (solo owner/superadmin)
+export async function DELETE(req: Request) {
+  const auth = await authorize(req);
+  if ('error' in auth) return auth.error;
+
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) {
+    return NextResponse.json({ error: 'Se requiere el id de la clave.' }, { status: 400 });
+  }
+
+  const { data: key, error } = await auth.access.supabase
+    .from('tenant_api_keys')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', auth.access.tenantId)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: 'Error al revocar la clave.' }, { status: 500 });
+  }
+  if (!key) {
+    return NextResponse.json({ error: 'Clave no encontrada.' }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
 }

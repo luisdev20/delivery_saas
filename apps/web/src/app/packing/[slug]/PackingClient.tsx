@@ -190,14 +190,9 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
             <Boxes size={22} className="hidden sm:block" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-base font-extrabold text-white tracking-wide uppercase truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">
-                Packing &middot; {restaurant.name}
-              </h1>
-              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
-                En Vivo
-              </span>
-            </div>
+            <h1 className="text-xs sm:text-base font-extrabold text-white tracking-wide uppercase truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">
+              Packing &middot; {restaurant.name}
+            </h1>
             <p className="hidden sm:block text-xs text-indigo-300 font-medium truncate">
               Estación de Preparación, Empaque y Despacho
             </p>
@@ -207,15 +202,12 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
         {/* Middle Stats Badges (Desktop only) */}
         <div className="hidden lg:flex items-center gap-2.5">
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-blue-200">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
             Nuevos: <span className="text-white font-bold">{packingNuevos.length}</span>
           </div>
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-amber-200">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             En Preparación: <span className="text-white font-bold">{packingPrep.length}</span>
           </div>
           <div className="px-3 py-1 rounded-lg bg-indigo-900/90 border border-indigo-700/80 flex items-center gap-2 text-xs font-semibold text-emerald-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
             Listos: <span className="text-white font-bold">{packingListos.length}</span>
           </div>
         </div>
@@ -336,7 +328,7 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
                       key={order.id}
                       className={`rounded-lg sm:rounded-xl border-2 p-2.5 sm:p-3.5 shadow-sm bg-white transition-all ${
                         isUrgent
-                          ? 'border-red-400 bg-red-50/30 ring-2 ring-red-300 animate-pulse'
+                          ? 'border-red-400 bg-red-50/30 ring-2 ring-red-300'
                           : 'border-slate-200 hover:border-indigo-400 hover:shadow-md'
                       }`}
                     >
@@ -469,7 +461,7 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
             <div className="p-2 sm:p-3.5 bg-amber-50/80 border-b border-amber-100 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                  <Layers size={12} className="animate-pulse" />
+                  <Layers size={12} />
                 </div>
                 <h2 className="font-extrabold text-[10px] sm:text-xs text-amber-900 uppercase tracking-wider truncate">
                   2. En Preparación &middot; Empaque
@@ -496,7 +488,7 @@ export default function PackingClient({ restaurant, initialOrders }: Props) {
                       key={order.id}
                       className={`rounded-lg sm:rounded-xl border-2 p-2.5 sm:p-3.5 shadow-sm bg-white transition-all ${
                         isUrgent
-                          ? 'border-red-400 bg-red-50/30 ring-2 ring-red-300 animate-pulse'
+                          ? 'border-red-400 bg-red-50/30 ring-2 ring-red-300'
                           : 'border-amber-300 bg-white hover:border-amber-400 hover:shadow-md'
                       }`}
                     >

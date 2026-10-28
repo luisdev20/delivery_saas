@@ -7,7 +7,7 @@ export type OrderStatus =
   | 'CANCELADO';
 
 export type PlanType = 'STARTER' | 'GROWTH' | 'ENTERPRISE';
-export type UserRole = 'superadmin' | 'owner' | 'manager' | 'dispatcher';
+export type UserRole = 'superadmin' | 'owner' | 'manager' | 'dispatcher' | 'packing';
 export type BusinessType = 'RESTAURANTE' | 'FARMACIA' | 'RETAIL' | 'LOGISTICA_GENERAL' | 'OTRO';
 
 export type CancellationReason =
@@ -63,6 +63,7 @@ export interface Tenant {
   slug: string;
   phone: string;
   address: string;
+  ruc?: string | null;
   lat: number | null;
   lng: number | null;
   max_delivery_radius_km: number;
@@ -180,9 +181,9 @@ export interface TenantApiKey {
 
 export type MerchantApiKey = TenantApiKey;
 
-/* Plan limits reference */
+/* Plan limits reference (alineado al onboarding de billing-portal) */
 export const PLAN_LIMITS: Record<PlanType, { label: string; maxDrivers: number; maxOrders: number; price: number }> = {
   STARTER:    { label: 'Starter',    maxDrivers: 2,  maxOrders: 300,    price: 99 },
-  GROWTH:     { label: 'Growth',     maxDrivers: 6,  maxOrders: 1200,   price: 199 },
-  ENTERPRISE: { label: 'Enterprise', maxDrivers: 999, maxOrders: 999999, price: 399 },
+  GROWTH:     { label: 'Growth',     maxDrivers: 5,  maxOrders: 1000,   price: 199 },
+  ENTERPRISE: { label: 'Enterprise', maxDrivers: 99, maxOrders: 3000,   price: 399 },
 };
