@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  ArrowRight, CalendarDays, Check, CreditCard, Loader2, Receipt,
+  ArrowRight, CalendarDays, CreditCard, Loader2, Receipt,
   RefreshCw, ShieldCheck, Smartphone, Sparkles, X,
 } from 'lucide-react';
 import type { Restaurant, Subscription, PlanType } from '@/lib/supabase/types';
@@ -140,16 +140,11 @@ export default function BillingPanel({
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-              Suscripción y Facturación
-            </h2>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-              {snapshot.planLabel}
-            </span>
-          </div>
+          <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+            Suscripción y Facturación
+          </h2>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-            Auditoría del contrato, ciclo de cobro e historial financiero de {tenant.name}
+            Contrato, ciclo de cobro e historial de {tenant.name}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -210,18 +205,17 @@ export default function BillingPanel({
               </span>
             </p>
           </div>
-          <span
-            className={`self-start sm:self-auto inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-full ${
-              snapshot.isExpired
-                ? 'bg-rose-600 text-white'
-                : snapshot.isTrial
-                  ? 'bg-sky-100 text-sky-800 border border-sky-200'
-                  : 'bg-emerald-600 text-white'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80" />
-            {snapshot.statusLabel}
-          </span>
+          {(snapshot.isExpired || snapshot.isTrial) && (
+            <span
+              className={`self-start sm:self-auto inline-flex items-center text-[11px] font-black px-3 py-1.5 rounded-full ${
+                snapshot.isExpired
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-sky-100 text-sky-800 border border-sky-200'
+              }`}
+            >
+              {snapshot.statusLabel}
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
@@ -305,7 +299,6 @@ export default function BillingPanel({
                   <th className="py-3 px-4">Fecha y hora</th>
                   <th className="py-3 px-4">Método</th>
                   <th className="py-3 px-4">Monto</th>
-                  <th className="py-3 px-4">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -338,11 +331,6 @@ export default function BillingPanel({
                     </td>
                     <td className="py-3 px-4 text-xs font-black text-slate-800">
                       {formatPen(Number(transaction.amount_pen))}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-700">
-                        <Check size={10} /> {transaction.status}
-                      </span>
                     </td>
                   </tr>
                 ))}

@@ -859,6 +859,7 @@ export default function AdminDashboardClient({
   const deliveredCount = orders.filter(o => o.status === 'ENTREGADO').length;
   const allCount       = orders.length;
   const enRutaCount    = orders.filter(o => o.status === 'EN_CAMINO').length;
+  const listosCount    = orders.filter(o => o.status === 'LISTO').length;
   const todayCount     = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length;
 
   const handleLogout = async () => {
@@ -906,7 +907,7 @@ export default function AdminDashboardClient({
           {allRestaurants && allRestaurants.length > 1 && (
             <div className="pt-1">
               <label className="text-[9px] uppercase font-bold text-indigo-400 block mb-1">
-                Comercio Activo:
+                Comercio:
               </label>
               <select
                 value={restaurant.slug}
@@ -1006,11 +1007,11 @@ export default function AdminDashboardClient({
         <div className="p-4 border-t border-indigo-800/60 bg-indigo-950/40">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold tracking-wider uppercase text-indigo-300">
-              Motor Logístico
+              Recepción de pedidos
             </span>
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40' : 'bg-red-500/20 text-red-300 border border-red-400/40'}`}>
-              {currentRestaurant.is_open ? 'RECIBIENDO' : 'PAUSADO'}
-            </span>
+            {!currentRestaurant.is_open && (
+              <span className="text-[10px] font-black text-red-300">Pausada</span>
+            )}
           </div>
           <button
             onClick={toggleStoreStatus}
@@ -1054,10 +1055,14 @@ export default function AdminDashboardClient({
           <span className="font-bold text-sm text-slate-800">{restaurant.name}</span>
           <button
             onClick={toggleStoreStatus}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${currentRestaurant.is_open ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}
+            disabled={togglingOpen}
+            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors disabled:opacity-50 ${
+              currentRestaurant.is_open
+                ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
           >
-            <div className={`w-2 h-2 rounded-full ${currentRestaurant.is_open ? 'bg-emerald-500 pulse-dot' : 'bg-red-500'}`} />
-            {currentRestaurant.is_open ? 'Activo' : 'Pausado'}
+            {togglingOpen ? '…' : currentRestaurant.is_open ? 'Pausar' : 'Reanudar'}
           </button>
         </header>
 
@@ -1070,15 +1075,12 @@ export default function AdminDashboardClient({
             {/* Header */}
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
-                <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                    {currentRestaurant.name}
-                  </h2>
-                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Monitor de Despachos
-                  </span>
-                </div>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Control logístico y telemetría de órdenes en tiempo real</p>
+                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {currentRestaurant.name}
+                </h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+                  Pedidos, repartidores y entregas del comercio.
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -1096,26 +1098,22 @@ export default function AdminDashboardClient({
                 >
                   <PlusCircle size={16} /> + Nuevo Despacho
                 </button>
-                <div
-                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                    readOnly
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : snapshot.quotaReached
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}
-                >
+                {(readOnly || snapshot.quotaReached) && (
                   <div
-                    className={`w-2 h-2 rounded-full ${
+                    className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
                       readOnly
-                        ? 'bg-rose-500'
-                        : snapshot.quotaReached
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500 pulse-dot'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}
-                  />
-                  {readOnly ? 'Solo lectura' : snapshot.quotaReached ? 'Cuota agotada' : 'Sistema Activo'}
-                </div>
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        readOnly ? 'bg-rose-500' : 'bg-amber-500'
+                      }`}
+                    />
+                    {readOnly ? 'Solo lectura' : 'Cuota agotada'}
+                  </div>
+                )}
               </div>
             </header>
 
@@ -1152,8 +1150,8 @@ export default function AdminDashboardClient({
                   <Boxes size={22} className="hidden sm:block" />
                 </div>
                 <div>
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Activos</p>
-                  <p className="text-sm sm:text-2xl font-bold text-emerald-600 leading-tight mt-0.5 sm:mt-0">{activeCount}</p>
+                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Listos</p>
+                  <p className="text-sm sm:text-2xl font-bold text-emerald-600 leading-tight mt-0.5 sm:mt-0">{listosCount}</p>
                 </div>
               </div>
             </div>
@@ -1511,15 +1509,12 @@ export default function AdminDashboardClient({
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in space-y-6">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                    {currentRestaurant.name}
-                  </h2>
-                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Integración API REST B2B
-                  </span>
-                </div>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Externaliza y automatiza tus despachos en 5 minutos desde cualquier software o e-commerce</p>
+                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {currentRestaurant.name}
+                </h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+                  Conecta tu e-commerce o ERP con el motor de despachos
+                </p>
               </div>
               <button
                 onClick={() => setShowNewKeyModal(true)}
@@ -1553,7 +1548,7 @@ export default function AdminDashboardClient({
             {/* Active API Keys List */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
               <h3 className="font-bold text-sm text-slate-800 mb-4 flex items-center gap-2">
-                <Key size={16} className="text-indigo-600" /> Claves de API Activas
+                <Key size={16} className="text-indigo-600" /> Claves de API
               </h3>
 
               {apiKeys.length === 0 ? (
@@ -1569,9 +1564,11 @@ export default function AdminDashboardClient({
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-sm text-slate-800">{k.name}</p>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${k.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                            {k.is_active ? 'Activa' : 'Desactivada'}
-                          </span>
+                          {!k.is_active && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                              Pausada
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs font-mono text-slate-400 mt-0.5">Prefijo: {k.key_prefix}</p>
                         <p className="text-[11px] text-slate-400">Creada: {new Date(k.created_at).toLocaleDateString('es-PE')}</p>

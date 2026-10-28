@@ -29,12 +29,6 @@ export default function PlanBadge({ snapshot, onOpenBilling }: Props) {
         ? 'text-emerald-200'
         : 'text-indigo-100';
 
-  const dotClass = isExpired
-    ? 'bg-rose-400'
-    : snapshot.status === 'TRIAL'
-      ? 'bg-sky-400'
-      : 'bg-emerald-400';
-
   return (
     <button
       type="button"
@@ -69,19 +63,19 @@ export default function PlanBadge({ snapshot, onOpenBilling }: Props) {
         <ChevronRight size={14} className="text-white/40 shrink-0 mt-1" />
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-white/80">
-          <span className={`w-1.5 h-1.5 rounded-full ${dotClass} ${isExpired ? '' : 'pulse-dot'}`} />
-          {snapshot.statusLabel}
-        </span>
-        {snapshot.periodEnd && (
-          <span className="text-[10px] text-white/55">
-            {snapshot.isExpired ? 'Venció' : 'Renueva'} {snapshot.renewalDateLabel}
-          </span>
-        )}
-      </div>
+      <p className="mt-2 text-[10px] font-semibold text-white/70">
+        {!snapshot.hasSubscription
+          ? 'Sin contrato activo'
+          : snapshot.isExpired
+            ? `Venció ${snapshot.renewalDateLabel}`
+            : snapshot.isTrial
+              ? `Prueba · ${snapshot.daysRemaining} día${snapshot.daysRemaining === 1 ? '' : 's'}`
+              : snapshot.periodEnd
+                ? `Renueva ${snapshot.renewalDateLabel}`
+                : 'Sin ciclo de cobro'}
+      </p>
 
-      {!snapshot.isExpired && snapshot.daysRemaining <= 5 && (
+      {!snapshot.isExpired && !snapshot.isTrial && snapshot.daysRemaining <= 5 && (
         <p className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-amber-200">
           <Sparkles size={10} />
           {snapshot.daysRemaining === 0

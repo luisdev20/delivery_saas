@@ -98,7 +98,7 @@ export default async function AdminHubPage({ searchParams }: Props) {
       <main className="max-w-5xl mx-auto w-full px-4 py-8 sm:py-12 flex-1">
         <div className="mb-8">
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Comercios Activos
+            Comercios
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
             Cada comercio cuenta con su propia consola aislada de pedidos y motorizados.
@@ -124,13 +124,11 @@ export default async function AdminHubPage({ searchParams }: Props) {
                     >
                       <Store size={22} />
                     </div>
-                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                      merchant.is_open
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        : 'bg-red-500/20 text-red-300 border-red-500/30'
-                    }`}>
-                      {merchant.is_open ? '● Activo' : '○ Pausado'}
-                    </span>
+                    {!merchant.is_open && (
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border bg-red-500/20 text-red-300 border-red-500/30">
+                        Pausado
+                      </span>
+                    )}
                   </div>
 
                   <div>

@@ -71,12 +71,12 @@ export default function OrderQuotaWidget({ snapshot, onOpenBilling }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`text-[11px] font-black px-2.5 py-1 rounded-full ${
+            className={`text-[11px] font-bold ${
               snapshot.quotaState === 'exhausted'
-                ? 'bg-red-50 text-red-700 border border-red-200'
+                ? 'text-red-600'
                 : snapshot.quotaState === 'warning'
-                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  ? 'text-amber-600'
+                  : 'text-slate-400'
             }`}
           >
             {Math.round(snapshot.usagePercent)}% consumido

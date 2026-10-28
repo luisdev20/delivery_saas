@@ -84,16 +84,11 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
   return (
     <div className="space-y-6 max-w-4xl">
       <header>
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-            Configuración del Negocio
-          </h2>
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-            Perfil del comercio
-          </span>
-        </div>
+        <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+          Configuración del Negocio
+        </h2>
         <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-          Identidad fiscal y operativa vinculada a tu comercio en la plataforma
+          Datos fiscales y operativos del comercio
         </p>
       </header>
 
@@ -213,16 +208,16 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
         <div className="space-y-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Estado operativo del local
+              Recepción de pedidos
             </p>
             <div className="mt-3 flex items-center justify-between gap-3">
               <div>
                 <p
                   className={`text-sm font-black ${
-                    isOpen ? 'text-emerald-700' : 'text-red-700'
+                    isOpen ? 'text-slate-800' : 'text-red-700'
                   }`}
                 >
-                  {isOpen ? 'Recibiendo pedidos' : 'Recepción pausada'}
+                  {isOpen ? 'Pedidos habilitados' : 'Pedidos pausados'}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
                   {isOpen
