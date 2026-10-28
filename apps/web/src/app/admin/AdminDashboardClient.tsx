@@ -7,15 +7,15 @@ import {
   Bell, Package, Truck, CheckCircle, XCircle,
   MapPin, Phone, User, CreditCard, MessageSquare,
   LogOut, Menu, BarChart2, X, Users, Store,
-  Timer, ArrowRight, Plus, Trash2, Loader2,
-  TrendingUp, DollarSign, Target, Key, Code, Copy, Check,
+  Timer, ArrowRight, Plus, Loader2,
+  TrendingUp, DollarSign, Target,
   ShieldCheck, AlertTriangle, Boxes, PackageCheck,
   PlusCircle, Search, RotateCcw,
   Receipt, Settings,
 } from 'lucide-react';
 import type {
   Order, Driver, Restaurant, OrderStatus, Subscription,
-  MerchantApiKey, CancellationReason,
+  CancellationReason,
 } from '@/lib/supabase/types';
 import { CANCELLATION_REASONS } from '@/lib/supabase/types';
 import {
@@ -60,10 +60,9 @@ const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
   CANCELADO:      '',
 };
 
-type AdminTab = 'dashboard' | 'fleet' | 'api_keys' | 'metrics' | 'billing' | 'settings';
+type AdminTab = 'dashboard' | 'fleet' | 'metrics' | 'billing' | 'settings';
 type FilterTab = 'active' | 'delivered' | 'all';
 type MetricsRange = 'today' | '7days' | 'month' | 'last_month';
-type CodeTab = 'curl' | 'js' | 'python';
 
 interface SidebarNavItem {
   id: AdminTab;
@@ -92,7 +91,6 @@ export default function AdminDashboardClient({
 }: Props) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
-  const [apiKeys, setApiKeys] = useState<MerchantApiKey[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('active');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
@@ -188,14 +186,6 @@ export default function AdminDashboardClient({
   const [cancelNote, setCancelNote] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
-  // API Key creation & display modal
-  const [showNewKeyModal, setShowNewKeyModal] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [generatingKey, setGeneratingKey] = useState(false);
-  const [rawKeyDisplay, setRawKeyDisplay] = useState<{ rawKey: string; name: string } | null>(null);
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [activeCodeTab, setActiveCodeTab] = useState<CodeTab>('curl');
-
   // Metrics
   const [metricsRange, setMetricsRange] = useState<MetricsRange>('today');
   const [metricsOrders, setMetricsOrders] = useState<Order[]>([]);
@@ -255,22 +245,12 @@ export default function AdminDashboardClient({
     if (data) setDrivers(data as Driver[]);
   }, [restaurant.id, supabase]);
 
-  const loadApiKeys = useCallback(async () => {
-    const { data } = await supabase
-      .from('tenant_api_keys')
-      .select('*')
-      .eq('tenant_id', restaurant.id)
-      .order('created_at', { ascending: false });
-    if (data) setApiKeys(data as MerchantApiKey[]);
-  }, [restaurant.id, supabase]);
-
   useEffect(() => {
     // Carga inicial de datos del panel desde Supabase.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
     loadDrivers();
-    loadApiKeys();
-  }, [loadOrders, loadDrivers, loadApiKeys]);
+  }, [loadOrders, loadDrivers]);
 
   // Realtime Supabase Subscription for Orders
   useEffect(() => {
@@ -556,64 +536,6 @@ export default function AdminDashboardClient({
     }
   };
 
-  // API Keys Management
-  const handleGenerateApiKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (readOnly) {
-      toast.error('Suscripción vencida: renueva tu plan para generar nuevas claves API.');
-      return;
-    }
-    setGeneratingKey(true);
-    try {
-      const res = await fetch('/api/v1/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKeyName.trim() || 'Clave API Producción' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al generar clave');
-
-      setRawKeyDisplay({ rawKey: data.raw_key, name: data.key.name });
-      setApiKeys(prev => [data.key, ...prev]);
-      setShowNewKeyModal(false);
-      setNewKeyName('');
-      toast.success('Clave API generada con éxito');
-    } catch (err: unknown) {
-      toast.error((err as Error).message || 'Error al generar clave API');
-    } finally {
-      setGeneratingKey(false);
-    }
-  };
-
-  const handleToggleApiKey = async (key: MerchantApiKey) => {
-    const newVal = !key.is_active;
-    const { error } = await supabase
-      .from('tenant_api_keys')
-      .update({ is_active: newVal })
-      .eq('id', key.id);
-    if (!error) {
-      setApiKeys(prev => prev.map(k => k.id === key.id ? { ...k, is_active: newVal } : k));
-      toast.success(newVal ? 'Clave API activada' : 'Clave API deshabilitada');
-    }
-  };
-
-  const handleDeleteApiKey = async (key: MerchantApiKey) => {
-    if (!confirm(`¿Eliminar la clave "${key.name}"? Los sistemas que usen este token ya no podrán despachar.`)) return;
-    const { error } = await supabase.from('tenant_api_keys').delete().eq('id', key.id);
-    if (!error) {
-      setApiKeys(prev => prev.filter(k => k.id !== key.id));
-      toast.success('Clave API eliminada');
-    }
-  };
-
-  const handleCopyRawKey = () => {
-    if (!rawKeyDisplay) return;
-    navigator.clipboard.writeText(rawKeyDisplay.rawKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2500);
-    toast.success('Clave copiada al portapapeles');
-  };
-
   // Metrics Data Loading
   const loadMetricsOrders = useCallback(async (range: MetricsRange) => {
     let from: string;
@@ -870,7 +792,6 @@ export default function AdminDashboardClient({
   const sidebarNavItems: SidebarNavItem[] = [
     { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Monitor de Despachos', badge: activeCount },
     { id: 'fleet',     icon: <Users size={18} />,     label: 'Personal Operativo', badge: activeDriverCount },
-    { id: 'api_keys',  icon: <Key size={18} />,       label: 'Integración API B2B', badge: apiKeys.filter(k => k.is_active).length },
     { id: 'metrics',   icon: <TrendingUp size={18} />, label: 'Métricas' },
     { id: 'billing',   icon: <Receipt size={18} />,   label: 'Suscripción y Facturación' },
     { id: 'settings',  icon: <Settings size={18} />,  label: 'Configuración del Negocio' },
@@ -1504,216 +1425,6 @@ export default function AdminDashboardClient({
           </div>
         )}
 
-        {/* ================= TAB 3: B2B API INTEGRATION (PLUG & PLAY) ================= */}
-        {adminTab === 'api_keys' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in space-y-6">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {currentRestaurant.name}
-                </h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-                  Conecta tu e-commerce o ERP con el motor de despachos
-                </p>
-              </div>
-              <button
-                onClick={() => setShowNewKeyModal(true)}
-                disabled={readOnly}
-                title={
-                  readOnly
-                    ? 'Suscripción vencida: renueva tu plan para generar nuevas claves'
-                    : undefined
-                }
-                className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus size={16} /> Generar Clave API
-              </button>
-            </header>
-
-            {/* Architecture Banner */}
-            <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-2xl p-6 shadow-md border border-indigo-700">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 text-indigo-300">
-                  <Code size={24} />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-base text-white">Desacoplamiento B2B Agnóstico</h3>
-                  <p className="text-xs text-indigo-200 leading-relaxed max-w-3xl">
-                    Tu sistema de ventas o ERP envía los despachos a nuestro motor logístico mediante el endpoint <code className="bg-indigo-950 px-1.5 py-0.5 rounded text-amber-300 font-mono">POST /api/v1/orders</code>. Nosotros gestionamos telemetría GPS, KDS, tiempos y validación de PIN anti-fraude.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Active API Keys List */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
-              <h3 className="font-bold text-sm text-slate-800 mb-4 flex items-center gap-2">
-                <Key size={16} className="text-indigo-600" /> Claves de API
-              </h3>
-
-              {apiKeys.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  <Key size={32} className="mx-auto mb-2 opacity-40" />
-                  <p className="text-sm font-medium">No has generado claves de API aún</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Haz clic en &ldquo;Generar Clave API&rdquo; para obtener tus credenciales de integración.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {apiKeys.map(k => (
-                    <div key={k.id} className="py-3.5 flex items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm text-slate-800">{k.name}</p>
-                          {!k.is_active && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                              Pausada
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-mono text-slate-400 mt-0.5">Prefijo: {k.key_prefix}</p>
-                        <p className="text-[11px] text-slate-400">Creada: {new Date(k.created_at).toLocaleDateString('es-PE')}</p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleToggleApiKey(k)}
-                          className={`btn btn-sm text-xs py-1 px-2.5 ${k.is_active ? 'btn-secondary text-amber-700' : 'btn-indigo'}`}
-                        >
-                          {k.is_active ? 'Pausar' : 'Activar'}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteApiKey(k)}
-                          className="btn btn-ghost btn-sm text-red-500 p-1.5 hover:bg-red-50"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Interactive Code Snippets */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="border-b border-slate-200 px-5 py-3.5 bg-slate-50 flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-sm text-slate-800">Ejemplo de Integración (Crear Despacho)</h3>
-                  <p className="text-xs text-slate-500">Envía un requerimiento de entrega en tiempo real a la API</p>
-                </div>
-
-                <div className="flex gap-1 bg-slate-200/70 p-1 rounded-lg">
-                  {(['curl', 'js', 'python'] as const).map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveCodeTab(tab)}
-                      className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${
-                        activeCodeTab === tab ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {tab.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-5 bg-slate-950 text-slate-200 font-mono text-xs overflow-x-auto">
-                {activeCodeTab === 'curl' && (
-                  <pre>{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders" \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: dtk_live_TU_CLAVE_AQUI" \\
-  -d '{
-    "external_order_id": "ORD-9481",
-    "customer": {
-      "name": "Juan Perez",
-      "phone": "+51987654321",
-      "address": "Av. Principal 456, Lima",
-      "reference": "Dpto 302",
-      "lat": -12.1219,
-      "lng": -77.0298
-    },
-    "items": [
-      { "name": "Medicamentos / Zapatillas / Pedido Criollo", "quantity": 1, "unit_price": 45.00 }
-    ],
-    "payment": {
-      "method": "YAPE",
-      "total_amount": 45.00
-    },
-    "notes": "Llamar al llegar a la puerta"
-  }'`}</pre>
-                )}
-
-                {activeCodeTab === 'js' && (
-                  <pre>{`const response = await fetch('${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': 'dtk_live_TU_CLAVE_AQUI',
-  },
-  body: JSON.stringify({
-    external_order_id: 'ORD-9481',
-    customer: {
-      name: 'Juan Perez',
-      phone: '+51987654321',
-      address: 'Av. Principal 456, Lima',
-      reference: 'Dpto 302',
-      lat: -12.1219,
-      lng: -77.0298,
-    },
-    items: [
-      { name: 'Paquete de despacho', quantity: 1, unit_price: 45.00 }
-    ],
-    payment: {
-      method: 'YAPE',
-      total_amount: 45.00,
-    },
-  }),
-});
-
-const data = await response.json();
-console.log('Despacho creado:', data.order_id, 'PIN:', data.pin_code, 'Tracking:', data.tracking_url);`}</pre>
-                )}
-
-                {activeCodeTab === 'python' && (
-                  <pre>{`import requests
-
-url = "${typeof window !== 'undefined' ? window.location.origin : 'https://api.tu-saas.com'}/api/v1/orders"
-headers = {
-    "Content-Type": "application/json",
-    "x-api-key": "dtk_live_TU_CLAVE_AQUI",
-}
-payload = {
-    "external_order_id": "ORD-9481",
-    "customer": {
-        "name": "Juan Perez",
-        "phone": "+51987654321",
-        "address": "Av. Principal 456, Lima",
-        "reference": "Dpto 302",
-        "lat": -12.1219,
-        "lng": -77.0298,
-    },
-    "items": [{"name": "Paquete logística", "quantity": 1, "unit_price": 45.00}],
-    "payment": {"method": "YAPE", "total_amount": 45.00},
-}
-
-response = requests.post(url, json=payload, headers=headers)
-print(response.json())`}</pre>
-                )}
-              </div>
-              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 leading-relaxed">
-                <strong className="text-slate-700">Notas:</strong> métodos de pago válidos:{' '}
-                <code className="font-mono text-indigo-700">EFECTIVO</code>,{' '}
-                <code className="font-mono text-indigo-700">YAPE</code>,{' '}
-                <code className="font-mono text-indigo-700">PLIN</code>. Envía la clave desde tu{' '}
-                <strong>servidor</strong> (nunca en el navegador). La respuesta incluye{' '}
-                <code className="font-mono text-indigo-700">order_id</code>,{' '}
-                <code className="font-mono text-indigo-700">pin_code</code> y{' '}
-                <code className="font-mono text-indigo-700">tracking_url</code>.
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ================= TAB 4: METRICS ================= */}
         {adminTab === 'metrics' && (
           <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
@@ -1941,6 +1652,8 @@ print(response.json())`}</pre>
               key={currentRestaurant.id}
               tenant={currentRestaurant}
               onUpdated={(nextTenant) => setCurrentRestaurant(nextTenant)}
+              canManageApiKeys={userRole === 'owner' || userRole === 'superadmin'}
+              readOnly={readOnly}
             />
           </div>
         )}
@@ -2162,90 +1875,6 @@ print(response.json())`}</pre>
                 className="btn bg-red-600 hover:bg-red-700 text-white flex-1 text-xs font-bold"
               >
                 {cancelling ? 'Cancelando...' : 'Confirmar Cancelación'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: GENERAR NUEVA API KEY ================= */}
-      {showNewKeyModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-3">
-              <Key size={20} />
-              <h3 className="font-bold text-base text-slate-900">Generar Clave API B2B</h3>
-            </div>
-
-            <form onSubmit={handleGenerateApiKey} className="space-y-4">
-              <div className="form-group">
-                <label className="form-label text-xs font-semibold uppercase">Nombre Identificador</label>
-                <input
-                  className="form-input"
-                  placeholder="Ej. Servidor Producción Shopify / ERP"
-                  value={newKeyName}
-                  onChange={e => setNewKeyName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <p className="text-[11px] text-slate-500 leading-tight">
-                Se generará una clave secreta <code className="bg-slate-100 px-1 font-mono">dtk_live_...</code> con acceso de escritura para despachos.
-              </p>
-
-              <div className="flex gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setShowNewKeyModal(false)} className="btn btn-secondary flex-1 text-xs">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={generatingKey} className="btn btn-indigo flex-1 text-xs font-bold">
-                  {generatingKey ? 'Generando...' : 'Generar Clave'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: MOSTRAR RAW API KEY RECIÉN CREADA ================= */}
-      {rawKeyDisplay && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2 text-emerald-600 border-b border-slate-100 pb-3">
-              <CheckCircle size={22} />
-              <h3 className="font-bold text-base text-slate-900">Clave API Generada</h3>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
-              <strong>Importante:</strong> Copie esta clave ahora mismo. Por motivos de seguridad, no volverá a mostrarse en su totalidad.
-            </div>
-
-            <div className="form-group">
-              <label className="form-label text-xs font-semibold uppercase text-slate-500">Token Secreto ({rawKeyDisplay.name})</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={rawKeyDisplay.rawKey}
-                  className="form-input font-mono text-xs bg-slate-50 text-indigo-900 select-all"
-                />
-                <button
-                  type="button"
-                  onClick={handleCopyRawKey}
-                  className="btn btn-indigo text-xs py-2 px-3 shrink-0 flex items-center gap-1"
-                >
-                  {copiedKey ? <Check size={14} /> : <Copy size={14} />}
-                  {copiedKey ? 'Copiado' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setRawKeyDisplay(null)}
-                className="btn btn-secondary w-full text-xs font-bold"
-              >
-                He guardado mi clave de forma segura
               </button>
             </div>
           </div>

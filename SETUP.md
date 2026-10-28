@@ -15,7 +15,7 @@ delivery_saas/
 │   ├── store_restaurante/   # Tienda demo B2B "Fuego & Carbón"  (cliente de la API) — puerto 3001
 │   └── store_libreria/      # Tienda demo B2B "Librería Atenea" (cliente de la API) — puerto 3002
 ├── supabase/
-│   ├── migrations/          # 001 → 010 (se aplican a mano, en orden)
+│   ├── migrations/          # 001 → 012 (se aplican a mano, en orden)
 │   ├── demo/                # utilidades de demo (p. ej. repartos frescos)
 │   └── seed.sql             # datos demo idempotentes
 ├── .env.example
@@ -57,7 +57,8 @@ En el **SQL Editor** de tu proyecto Supabase:
    → 004_refactor_to_tenant_daas.sql → 005_fix_driver_rls.sql
    → 006_order_cancellation_rpc.sql → 007_driver_lifecycle.sql
    → 008_auth_driver_credentials.sql → 009_tenants_missing_columns.sql
-   → 010_order_status_timestamps.sql
+   → 010_order_status_timestamps.sql → 011_subscription_governance.sql
+   → 012_api_key_owner_only.sql
    ```
 
 2. Ejecuta `supabase/seed.sql` (crea los comercios, repartidores y credenciales demo).
@@ -112,8 +113,9 @@ npm run demo:libreria
 
 > **Clave de las tiendas demo:** cada tienda necesita `apps/store_<tienda>/.env` con
 > `DELIVERY_API_KEY=dtk_live_…` (cópialo de `.env.example`). Genera la clave en la consola del
-> comercio (*Integración API B2B → Generar Clave API*). El `server.js` de la tienda hace de **proxy**,
-> por lo que la clave nunca se expone al navegador.
+> comercio (*Configuración del Negocio → Integraciones API → Generar clave*, solo `owner` o
+> `superadmin`). El `server.js` de la tienda hace de **proxy**, por lo que la clave nunca se expone
+> al navegador.
 
 **App del repartidor:**
 
@@ -132,7 +134,8 @@ flutter run -d emulator-5554 --dart-define-from-file=.env
 | `GET /api/v1/orders/[id]` | API B2B | Estado, telemetría GPS y bitácora. |
 | `POST /api/v1/orders/[id]` | API B2B | Cancelación estructurada con motivo (misma RPC que cliente/repartidor). |
 | `POST /api/v1/quotes` | API B2B | Cotización de envío. |
-| `/admin` | Web | Consola de despacho (pedidos, flota, métricas, API keys). |
+| `GET/POST/PATCH/DELETE /api/v1/keys` | API | Gestión de claves B2B (owner/superadmin). |
+| `/admin` | Web | Consola de despacho (pedidos, flota, suscripción, métricas y configuración). |
 | `/superadmin` | Web | Consola de superadmin (todos los comercios). |
 | `/packing/[slug]` | Web | Estación de empaque / preparación. |
 | `/tracking/[orderId]` | Web | Seguimiento para el cliente (PIN anti-fraude). |

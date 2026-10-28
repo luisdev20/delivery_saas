@@ -4,10 +4,13 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Building2, Loader2, MapPin, Phone, Save, ShieldCheck, Store } from 'lucide-react';
 import type { Restaurant } from '@/lib/supabase/types';
+import ApiIntegrationsPanel from '@/components/admin/ApiIntegrationsPanel';
 
 interface Props {
   tenant: Restaurant;
   onUpdated: (tenant: Restaurant) => void;
+  canManageApiKeys?: boolean;
+  readOnly?: boolean;
 }
 
 interface FormState {
@@ -17,7 +20,12 @@ interface FormState {
   ruc: string;
 }
 
-export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
+export default function BusinessSettingsPanel({
+  tenant,
+  onUpdated,
+  canManageApiKeys = false,
+  readOnly = false,
+}: Props) {
   const [form, setForm] = useState<FormState>({
     name: tenant.name,
     phone: tenant.phone,
@@ -273,6 +281,14 @@ export default function BusinessSettingsPanel({ tenant, onUpdated }: Props) {
           </div>
         </div>
       </div>
+
+      {canManageApiKeys && (
+        <ApiIntegrationsPanel
+          tenantId={tenant.id}
+          tenantName={tenant.name}
+          readOnly={readOnly}
+        />
+      )}
     </div>
   );
 }
