@@ -2,6 +2,8 @@
 
 **Delivery Tracker** es una plataforma tecnológica B2B bajo el modelo **SaaS / DaaS (Delivery as a Service)** diseñada para resolver la gestión logística de última milla. Actúa como un motor de despachos agnóstico que permite a comercios de cualquier rubro (restaurantes, librerías, farmacias, retail, ferreterías, repuestos) externalizar y digitalizar el rastreo satelital de sus envíos utilizando su propia flota de repartidores.
 
+**Entorno publicado:** https://delivery-saas-theta.vercel.app · **APK de motorizados:** https://github.com/luisdev20/delivery_saas/releases/tag/v1.0.0
+
 ---
 
 ## Principios de la Arquitectura DaaS

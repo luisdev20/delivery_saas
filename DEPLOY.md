@@ -184,3 +184,21 @@ liberarla o ejecutar la purga anticipada con confirmación por slug.
 - **Costos:** el consumo de Supabase (base de datos y almacenamiento) es
   el primer indicador a vigilar; Render solo afecta la disponibilidad de
   las tiendas de demostración.
+
+## 10. Entornos publicados
+
+| Componente | URL |
+|---|---|
+| Panel y API | https://delivery-saas-theta.vercel.app |
+| Tienda Restaurante | https://delivery-store-restaurante.onrender.com |
+| Tienda Librería | https://delivery-store-libreria.onrender.com |
+| APK de motorizados | https://github.com/luisdev20/delivery_saas/releases/tag/v1.0.0 |
+| Proyecto Supabase | `znqjggifhcldjnxrbcwt` |
+
+El panel despliega automáticamente cada push a `main` sobre el proyecto
+`delivery-saas` de Vercel. El cron de retención está registrado a las
+11:00 UTC (06:00 en Lima) sobre `/api/cron/retention`.
+
+Las tiendas de Render operan en plan gratuito: se suspenden tras 15
+minutos sin tráfico y el primer acceso posterior tarda alrededor de 30
+segundos.
