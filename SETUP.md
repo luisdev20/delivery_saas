@@ -58,7 +58,7 @@ En el **SQL Editor** de tu proyecto Supabase:
    → 006_order_cancellation_rpc.sql → 007_driver_lifecycle.sql
    → 008_auth_driver_credentials.sql → 009_tenants_missing_columns.sql
    → 010_order_status_timestamps.sql → 011_subscription_governance.sql
-   → 012_api_key_owner_only.sql
+   → 012_api_key_owner_only.sql → 013_tenant_retention.sql
    ```
 
 2. Ejecuta `supabase/seed.sql` (crea los comercios, repartidores y credenciales demo).
@@ -84,6 +84,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://<proyecto>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>          # o NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>       # solo servidor; nunca exponer al cliente
 NEXT_PUBLIC_APP_NAME="DeliveryOS"
+
+CRON_SECRET=<secreto-aleatorio>                    # autoriza /api/cron/retention
+RESEND_API_KEY=<api-key-opcional>                  # avisos de eliminación por correo
+RETENTION_EMAIL_FROM="DeliveryOS <no-reply@dominio.com>"
 ```
 
 **App móvil** — copia `apps/mobile_driver/.env.example` a `apps/mobile_driver/.env`:
