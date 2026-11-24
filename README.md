@@ -28,8 +28,11 @@
 | **`POST /api/v1/orders/[id]`** | `API B2B` | Cancelación estructurada con motivo (`QUIEBRE_STOCK`, `TIEMPO_EXCEDIDO`, …). |
 | **`POST /api/v1/quotes`** | `API B2B` | Cotización de envío. |
 | **`GET/POST/PATCH/DELETE /api/v1/keys`** | `API` | Gestión de tokens de acceso B2B (`dtk_live_...`). Solo `owner` o `superadmin`. |
+| **`POST /api/superadmin/payments`** | `API` | Registro de cobros manuales y renovación de ciclo (solo `superadmin`). |
+| **`POST /api/superadmin/retention`** | `API` | Prórroga, resguardo y purga anticipada de cuentas (solo `superadmin`). |
+| **`GET/POST /api/cron/retention`** | `Cron` | Avisos de eliminación y purga de cuentas vencidas (`Authorization: Bearer $CRON_SECRET`). |
 | **`/admin`** | `Web UI` | Consola de Despacho DaaS, Flota, Suscripción, Métricas y Configuración. |
-| **`/superadmin`** | `Web UI` | Consola de superadmin: todos los comercios de la plataforma. |
+| **`/superadmin`** | `Web UI` | Consola de plataforma: cartera de empresas, cobranza, retención y gobierno de datos. |
 | **`/packing/[slug]`** | `Web UI` | Estación de Empaque y Preparación en tiempo real. |
 | **`/tracking/[orderId]`** | `Web UI` | Pantalla de seguimiento satelital para el cliente con PIN de seguridad. |
 | **`/onboarding`** | `Web UI` | Alta de nuevos comercios multi-tenant (super-admin). |

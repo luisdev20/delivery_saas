@@ -20,9 +20,14 @@ import {
   Receipt,
   Ban,
   Lock,
+  Trash2,
+  Shield,
+  CalendarPlus,
+  Banknote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
+  PlanType,
   Restaurant,
   Subscription,
   TenantNotification,
@@ -33,10 +38,13 @@ import {
   formatDatePen,
   formatDateTimePen,
   formatPen,
+  PAID_PLANS,
+  PLAN_CATALOG,
   PAYMENT_METHOD_LABELS,
   type BillingTransaction,
   type SubscriptionSnapshot,
 } from '@/lib/subscription';
+import { getRetentionInfo, type RetentionInfo } from '@/lib/retention';
 import type { TenantMetricsSummary } from '@/app/superadmin/page';
 
 interface Props {
@@ -48,6 +56,8 @@ interface Props {
   onClose: () => void;
   onTenantUpdated: (tenant: Restaurant) => void;
   onSubscriptionUpdated: (subscription: Subscription) => void;
+  onPaymentRecorded: (subscription: Subscription, transaction: BillingTransaction) => void;
+  onTenantPurged: (tenantId: string, tenantName: string, tenantSlug: string) => void;
   onNotificationSent: (notifications: TenantNotification[]) => void;
 }
 
@@ -90,8 +100,18 @@ export default function MerchantGovernanceDrawer({
   onClose,
   onTenantUpdated,
   onSubscriptionUpdated,
+  onPaymentRecorded,
+  onTenantPurged,
   onNotificationSent,
 }: Props) {
+  const retentionInfo: RetentionInfo = getRetentionInfo({
+    createdAt: tenant.created_at,
+    subscription,
+    lastTransaction: transactions[0] ?? null,
+    extendedUntil: tenant.retention_extended_until ?? null,
+    hold: Boolean(tenant.retention_hold),
+  });
+
   // Notificación
   const [notifType, setNotifType] = useState<TenantNotificationType>('SUBSCRIPTION_EXPIRING');
   const [notifSeverity, setNotifSeverity] = useState<TenantNotificationSeverity>('WARNING');
@@ -99,10 +119,24 @@ export default function MerchantGovernanceDrawer({
   const [notifMessage, setNotifMessage] = useState('');
   const [sendingNotif, setSendingNotif] = useState(false);
 
-  // Prórroga
+  // Prórroga operativa
   const [graceDays, setGraceDays] = useState<number>(7);
   const [graceReason, setGraceReason] = useState('');
   const [grantingGrace, setGrantingGrace] = useState(false);
+
+  // Registro manual de pago (cobranza presencial / mora)
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [payPlan, setPayPlan] = useState<PlanType>(subscription?.plan ?? 'STARTER');
+  const [payMethod, setPayMethod] = useState<'YAPE' | 'TARJETA'>('YAPE');
+  const [payYapePhone, setPayYapePhone] = useState('');
+  const [payCardLastFour, setPayCardLastFour] = useState('');
+  const [recordingPay, setRecordingPay] = useState(false);
+
+  // Política de retención (30 días) y purga definitiva en cascada
+  const [retentionBusy, setRetentionBusy] = useState(false);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [purgeSlugInput, setPurgeSlugInput] = useState('');
+  const [purging, setPurging] = useState(false);
 
   // Cancelación de suscripción por soporte
   const [showCancelSub, setShowCancelSub] = useState(false);
@@ -277,6 +311,100 @@ export default function MerchantGovernanceDrawer({
       setCopiedPwd(true);
       setTimeout(() => setCopiedPwd(false), 2000);
     });
+  };
+
+  const handleRecordManualPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecordingPay(true);
+    try {
+      const res = await fetch('/api/superadmin/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenant.id,
+          plan: payPlan,
+          paymentMethod: payMethod,
+          yapePhone: payMethod === 'YAPE' ? payYapePhone : undefined,
+          cardLastFour: payMethod === 'TARJETA' ? payCardLastFour : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo registrar el pago manual.');
+
+      onPaymentRecorded(data.subscription as Subscription, data.transaction as BillingTransaction);
+      toast.success(`Pago manual registrado (${data.transaction.transaction_code}). Ciclo renovado.`);
+      setShowPaymentForm(false);
+      setPayYapePhone('');
+      setPayCardLastFour('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar el pago.');
+    } finally {
+      setRecordingPay(false);
+    }
+  };
+
+  const handleRetentionAction = async (action: 'extend' | 'hold' | 'release') => {
+    setRetentionBusy(true);
+    try {
+      const res = await fetch('/api/superadmin/retention', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          tenantId: tenant.id,
+          days: action === 'extend' ? 30 : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo actualizar la retención.');
+
+      if (action === 'extend') {
+        onTenantUpdated({ ...tenant, retention_extended_until: data.extendedUntil });
+        toast.success(`Plazo de retención extendido hasta ${formatDatePen(data.extendedUntil)}.`);
+      } else {
+        onTenantUpdated({ ...tenant, retention_hold: Boolean(data.hold) });
+        toast.success(
+          data.hold
+            ? 'Cuenta resguardada: excluida de la purga automática.'
+            : 'Resguardo liberado: la cuenta vuelve al cronograma de retención.'
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al gestionar retención.');
+    } finally {
+      setRetentionBusy(false);
+    }
+  };
+
+  const handlePurgeTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (purgeSlugInput.trim() !== tenant.slug) {
+      toast.error(`Escribe exactamente "${tenant.slug}" para confirmar la purga definitiva.`);
+      return;
+    }
+    setPurging(true);
+    try {
+      const res = await fetch('/api/superadmin/retention', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'purge',
+          tenantId: tenant.id,
+          confirmSlug: purgeSlugInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo ejecutar la purga definitiva.');
+
+      toast.success(
+        `Comercio "${tenant.name}" eliminado definitivamente (${data.authUsersDeleted ?? 0} cuenta(s) Auth purgada(s)).`
+      );
+      onTenantPurged(tenant.id, tenant.name, tenant.slug);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al ejecutar la purga.');
+    } finally {
+      setPurging(false);
+    }
   };
 
   const statusPillClass: Record<string, string> = {
@@ -646,7 +774,182 @@ export default function MerchantGovernanceDrawer({
             )}
           </section>
 
-          {/* 4. Comprobantes SaaS del comercio */}
+          {/* 4. Registro Manual de Cobro (Regularización / Presencial) */}
+          <section className="rounded-2xl border border-slate-200/80 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <Banknote size={14} className="text-emerald-600" />
+                Registro Manual de Pago
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowPaymentForm((v) => !v)}
+                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+              >
+                {showPaymentForm ? 'Ocultar' : 'Registrar cobro'}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Para pagos coordinados por Yape o tarjeta fuera de la pasarela del comercio. Renueva el ciclo y genera comprobante auditado.
+            </p>
+
+            {showPaymentForm && (
+              <form onSubmit={handleRecordManualPayment} className="space-y-2.5 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={payPlan}
+                    onChange={(e) => setPayPlan(e.target.value as PlanType)}
+                    className="form-input text-xs py-1.5 font-semibold"
+                  >
+                    {PAID_PLANS.map((p) => (
+                      <option key={p} value={p}>
+                        {PLAN_CATALOG[p].label} ({formatPen(PLAN_CATALOG[p].price)})
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value as 'YAPE' | 'TARJETA')}
+                    className="form-input text-xs py-1.5 font-semibold"
+                  >
+                    <option value="YAPE">Yape</option>
+                    <option value="TARJETA">Tarjeta</option>
+                  </select>
+                </div>
+
+                {payMethod === 'YAPE' ? (
+                  <input
+                    type="text"
+                    maxLength={9}
+                    value={payYapePhone}
+                    onChange={(e) => setPayYapePhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Celular Yape (9 dígitos)"
+                    className="form-input text-xs py-1.5 font-mono"
+                    required
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={payCardLastFour}
+                    onChange={(e) => setPayCardLastFour(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Últimos 4 dígitos de la tarjeta"
+                    className="form-input text-xs py-1.5 font-mono"
+                    required
+                  />
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={recordingPay}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    {recordingPay ? <Loader2 size={13} className="animate-spin" /> : <Banknote size={13} />}
+                    Confirmar pago ({formatPen(PLAN_CATALOG[payPlan].price)})
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+
+          {/* 5. Política de Retención (30 días) y Purga Definitiva en Cascada */}
+          <section className="rounded-2xl border border-rose-200/80 bg-rose-50/30 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-900 flex items-center gap-1.5">
+                <Trash2 size={14} className="text-rose-600" />
+                Retención (30 días) y Purga Definitiva
+              </h4>
+              <span
+                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                  retentionInfo.stage === 'HOLD'
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : retentionInfo.stage === 'ACTIVE'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                }`}
+              >
+                {retentionInfo.stageLabel}
+              </span>
+            </div>
+
+            <div className="text-[11px] text-slate-600 space-y-1">
+              <p>{retentionInfo.detail}</p>
+              {retentionInfo.stage !== 'ACTIVE' && retentionInfo.stage !== 'HOLD' && (
+                <p className="font-semibold text-rose-800 tabular-nums">
+                  Fecha límite de purga: {formatDatePen(retentionInfo.purgeAt)} ({retentionInfo.daysUntilPurge} día(s) restantes)
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={retentionBusy}
+                onClick={() => handleRetentionAction(tenant.retention_hold ? 'release' : 'hold')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                <Shield size={12} />
+                {tenant.retention_hold ? 'Liberar resguardo' : 'Resguardar cuenta'}
+              </button>
+
+              <button
+                type="button"
+                disabled={retentionBusy}
+                onClick={() => handleRetentionAction('extend')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                <CalendarPlus size={12} />
+                Extender retención +30d
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPurgeConfirm((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer ml-auto"
+              >
+                <Trash2 size={12} />
+                Purgar comercio
+              </button>
+            </div>
+
+            {showPurgeConfirm && (
+              <form onSubmit={handlePurgeTenant} className="p-3 rounded-xl bg-white border border-rose-300 space-y-2.5">
+                <p className="text-[11px] text-rose-900 font-semibold leading-relaxed">
+                  Acción irreversible: eliminará en cascada el comercio, sus pedidos, motorizados, API keys y cuentas de acceso sin otra membresía. Escribe <code className="font-mono bg-rose-50 px-1.5 py-0.5 rounded font-bold">{tenant.slug}</code> para confirmar:
+                </p>
+                <input
+                  type="text"
+                  value={purgeSlugInput}
+                  onChange={(e) => setPurgeSlugInput(e.target.value)}
+                  placeholder={tenant.slug}
+                  className="form-input text-xs py-1.5 font-mono"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPurgeConfirm(false);
+                      setPurgeSlugInput('');
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={purging || purgeSlugInput.trim() !== tenant.slug}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold cursor-pointer disabled:opacity-40"
+                  >
+                    {purging ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Confirmar purga definitiva
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+
+          {/* 6. Comprobantes SaaS del comercio */}
           <section className="space-y-2.5">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <Receipt size={14} className="text-slate-500" />

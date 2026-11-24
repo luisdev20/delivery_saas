@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   Lock,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -38,7 +39,8 @@ import {
   type SubscriptionSnapshot,
   type SubscriptionStatus,
 } from '@/lib/subscription';
-import type { TenantMetricsSummary } from './page';
+import { getRetentionInfo, type RetentionInfo } from '@/lib/retention';
+import type { RetentionAuditEvent, TenantMetricsSummary } from './page';
 import SuperAdminSidebar, { type SuperAdminTab } from '@/components/superadmin/SuperAdminSidebar';
 import MerchantGovernanceDrawer from '@/components/superadmin/MerchantGovernanceDrawer';
 import CreateMerchantModal from '@/components/superadmin/CreateMerchantModal';
@@ -51,6 +53,7 @@ interface Props {
   transactions: BillingTransaction[];
   tenantMetrics: TenantMetricsSummary[];
   initialNotifications: TenantNotification[];
+  initialRetentionEvents: RetentionAuditEvent[];
   notificationsReady: boolean;
   userEmail?: string | null;
 }
@@ -61,6 +64,7 @@ interface EnrichedMerchant {
   lastTransaction: BillingTransaction | null;
   transactions: BillingTransaction[];
   snapshot: SubscriptionSnapshot;
+  retention: RetentionInfo;
   metrics: TenantMetricsSummary;
 }
 
@@ -75,11 +79,11 @@ const TAB_HEADER: Record<SuperAdminTab, { title: string; subtitle: string }> = {
   },
   merchants: {
     title: 'Directorio de Comercios',
-    subtitle: 'Gobernanza de cuentas, capacidad operativa, soporte y prórrogas',
+    subtitle: 'Gobernanza de cuentas, capacidad operativa, soporte, pagos y retención',
   },
   subscriptions: {
-    title: 'Suscripciones y Vencimientos',
-    subtitle: 'Control de ciclos comerciales, alertas de cobranza y distribución de planes',
+    title: 'Suscripciones, Retención y Purga',
+    subtitle: 'Control de vencimientos, política de retención de 30 días y auditoría de purgas',
   },
   notifications: {
     title: 'Notificaciones Enviadas',
@@ -96,12 +100,22 @@ const STATUS_BADGE: Record<SubscriptionStatus, { label: string; className: strin
   NONE: { label: 'Sin plan', className: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
 
+const RETENTION_EVENT_LABEL: Record<RetentionAuditEvent['event_type'], { label: string; className: string }> = {
+  NOTICE: { label: 'Aviso 7d', className: 'bg-amber-50 text-amber-800 border-amber-200' },
+  FINAL_NOTICE: { label: 'Último aviso', className: 'bg-orange-50 text-orange-800 border-orange-200' },
+  PURGED: { label: 'Purgado', className: 'bg-rose-100 text-rose-800 border-rose-300' },
+  EXTENDED: { label: 'Prorrogado', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  HOLD: { label: 'Resguardado', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  RELEASED: { label: 'Liberado', className: 'bg-slate-100 text-slate-700 border-slate-200' },
+};
+
 export default function SuperAdminClient({
   tenants: initialTenants,
   subscriptions: initialSubscriptions,
   transactions: initialTransactions,
   tenantMetrics: initialMetrics,
   initialNotifications,
+  initialRetentionEvents,
   notificationsReady,
   userEmail,
 }: Props) {
@@ -110,6 +124,7 @@ export default function SuperAdminClient({
   const [transactions, setTransactions] = useState<BillingTransaction[]>(initialTransactions);
   const [metricsList, setMetricsList] = useState<TenantMetricsSummary[]>(initialMetrics);
   const [notifications, setNotifications] = useState<TenantNotification[]>(initialNotifications);
+  const [retentionEvents, setRetentionEvents] = useState<RetentionAuditEvent[]>(initialRetentionEvents);
 
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -158,7 +173,7 @@ export default function SuperAdminClient({
     window.location.href = '/login';
   };
 
-  // Enriquecer comercios con suscripción más reciente, comprobantes SaaS y métricas agregadas
+  // Enriquecer comercios con suscripción, retención (30d), comprobantes SaaS y métricas agregadas
   const enrichedMerchants: EnrichedMerchant[] = useMemo(() => {
     const metricsMap = new Map(metricsList.map((m) => [m.tenantId, m]));
     return tenants.map((tenant) => {
@@ -168,6 +183,13 @@ export default function SuperAdminClient({
       const snapshot = getSubscriptionSnapshot(sub, lastTx, new Date(), {
         isSuspended: Boolean(tenant.is_suspended),
         suspendedReason: tenant.suspended_reason ?? null,
+      });
+      const retention = getRetentionInfo({
+        createdAt: tenant.created_at,
+        subscription: sub,
+        lastTransaction: lastTx,
+        extendedUntil: tenant.retention_extended_until ?? null,
+        hold: Boolean(tenant.retention_hold),
       });
       const metrics = metricsMap.get(tenant.id) ?? {
         tenantId: tenant.id,
@@ -181,6 +203,7 @@ export default function SuperAdminClient({
         lastTransaction: lastTx,
         transactions: tenantTxs,
         snapshot,
+        retention,
         metrics,
       };
     });
@@ -208,8 +231,10 @@ export default function SuperAdminClient({
         ['ACTIVE', 'TRIAL', 'GRACE'].includes(m.snapshot.status) &&
         m.snapshot.daysRemaining <= 5
     );
+    const scheduledForPurge = enrichedMerchants.filter(
+      (m) => m.retention.isScheduledForDeletion
+    ).length;
 
-    // Ingresos SaaS del mes actual (desde billing_transactions de Delivery Tracker)
     const now = new Date();
     const monthRevenuePen = transactions
       .filter((tx) => {
@@ -222,7 +247,6 @@ export default function SuperAdminClient({
       })
       .reduce((acc, tx) => acc + Number(tx.amount_pen || 0), 0);
 
-    // MRR estimado por planes activos
     const estimatedMrr = enrichedMerchants
       .filter((m) => m.snapshot.status === 'ACTIVE')
       .reduce((acc, m) => acc + m.snapshot.price, 0);
@@ -236,6 +260,7 @@ export default function SuperAdminClient({
       suspendedMerchants,
       expiredMerchants,
       expiringSoonMerchants,
+      scheduledForPurge,
       atRiskCount: expiredMerchants.length + expiringSoonMerchants.length,
       monthRevenuePen,
       estimatedMrr,
@@ -244,15 +269,16 @@ export default function SuperAdminClient({
     };
   }, [enrichedMerchants, transactions, metricsList]);
 
-  // Comercios ordenados por urgencia de suscripción (vencidos hace más tiempo primero)
   const urgentMerchants = useMemo(() => {
     const priority = (m: EnrichedMerchant) => {
-      if (m.snapshot.status === 'EXPIRED') return 0;
-      if (m.snapshot.status === 'NONE') return 1;
-      if (m.snapshot.status === 'GRACE') return 2;
-      if (['ACTIVE', 'TRIAL'].includes(m.snapshot.status) && m.snapshot.daysRemaining <= 5) return 3;
-      if (m.snapshot.status === 'SUSPENDED') return 4;
-      return 5;
+      if (m.retention.stage === 'DUE') return 0;
+      if (m.retention.stage === 'FINAL_NOTICE' || m.retention.stage === 'NOTICE') return 1;
+      if (m.snapshot.status === 'EXPIRED') return 2;
+      if (m.snapshot.status === 'NONE') return 3;
+      if (m.snapshot.status === 'GRACE') return 4;
+      if (['ACTIVE', 'TRIAL'].includes(m.snapshot.status) && m.snapshot.daysRemaining <= 5) return 5;
+      if (m.snapshot.status === 'SUSPENDED') return 6;
+      return 7;
     };
 
     return [...enrichedMerchants].sort((a, b) => {
@@ -297,7 +323,13 @@ export default function SuperAdminClient({
   }, [notifications, notifsPage, notifsPageSize]);
 
   const attentionMerchants = useMemo(
-    () => urgentMerchants.filter((m) => m.snapshot.status !== 'ACTIVE' || m.snapshot.daysRemaining <= 5),
+    () =>
+      urgentMerchants.filter(
+        (m) =>
+          m.snapshot.status !== 'ACTIVE' ||
+          m.snapshot.daysRemaining <= 5 ||
+          m.retention.isScheduledForDeletion
+      ),
     [urgentMerchants]
   );
 
@@ -324,7 +356,7 @@ export default function SuperAdminClient({
           severity: 'URGENT',
           title: 'Recordatorio: tu suscripción está vencida',
           message:
-            'Tu panel opera en modo solo lectura. Renueva tu plan desde Suscripción y Facturación para reactivar tus despachos.',
+            'Tu panel opera en modo solo lectura. Renueva tu plan desde Suscripción y Facturación para reactivar tus despachos y evitar la purga tras 30 días.',
         }),
       });
       const data = await res.json();
@@ -366,6 +398,38 @@ export default function SuperAdminClient({
     return (
       <span className={`text-xs tabular-nums ${snapshot.daysRemaining <= 5 ? 'font-bold text-amber-700' : 'text-slate-600'}`}>
         Quedan {snapshot.daysRemaining}d · {snapshot.renewalDateLabel}
+      </span>
+    );
+  };
+
+  const renderRetentionPill = (retention: RetentionInfo) => {
+    if (retention.stage === 'ACTIVE') {
+      return <span className="text-[11px] text-slate-400">—</span>;
+    }
+    if (retention.stage === 'HOLD') {
+      return (
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+          Resguardada
+        </span>
+      );
+    }
+    if (retention.stage === 'DUE') {
+      return (
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-rose-100 text-rose-800 border-rose-300">
+          Purga pendiente
+        </span>
+      );
+    }
+    if (retention.stage === 'FINAL_NOTICE' || retention.stage === 'NOTICE') {
+      return (
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-orange-50 text-orange-800 border-orange-200 tabular-nums">
+          Purga en {retention.daysUntilPurge}d
+        </span>
+      );
+    }
+    return (
+      <span className="text-[11px] text-slate-500 tabular-nums">
+        Purga: {formatDatePen(retention.purgeAt)}
       </span>
     );
   };
@@ -431,7 +495,7 @@ export default function SuperAdminClient({
           </div>
         </header>
 
-        {/* Aviso si falta aplicar migración 013 */}
+        {/* Aviso si falta aplicar migración 014 */}
         {!notificationsReady && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 sm:px-6 py-2 text-xs text-amber-900 flex items-center gap-2 shrink-0">
             <AlertTriangle size={14} className="text-amber-600 shrink-0" />
@@ -484,6 +548,7 @@ export default function SuperAdminClient({
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
                       {kpis.expiredMerchants.length} vencidas · {kpis.expiringSoonMerchants.length} por vencer
+                      {kpis.scheduledForPurge > 0 ? ` · ${kpis.scheduledForPurge} purga` : ''}
                     </p>
                   </div>
                 </button>
@@ -532,7 +597,7 @@ export default function SuperAdminClient({
                       Comercios que Requieren Atención
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Priorizados por días de vencimiento, prórrogas activas o renovación próxima (≤5 días)
+                      Priorizados por proximidad a purga (30 días), vencimiento o renovación próxima (≤5 días)
                     </p>
                   </div>
                   {kpis.expiredMerchants.length > 0 && (
@@ -555,7 +620,7 @@ export default function SuperAdminClient({
                       Todas las suscripciones están saludables
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      No hay cuentas vencidas, suspendidas ni próximas a vencer.
+                      No hay cuentas vencidas, en ventana de purga ni próximas a vencer.
                     </p>
                   </div>
                 ) : (
@@ -578,6 +643,7 @@ export default function SuperAdminClient({
                                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${badge.className}`}>
                                     {badge.label}
                                   </span>
+                                  {m.retention.isScheduledForDeletion && renderRetentionPill(m.retention)}
                                   <span className="text-[11px] font-medium text-slate-500">
                                     Plan {m.snapshot.planLabel}
                                   </span>
@@ -637,10 +703,9 @@ export default function SuperAdminClient({
             />
           )}
 
-          {/* ================= TAB 2: DIRECTORIO DE COMERCIOS ================= */}
+          {/* ================= TAB 3: DIRECTORIO DE COMERCIOS ================= */}
           {activeTab === 'merchants' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-              {/* Barra de búsqueda y filtros */}
               <div className="p-4 border-b border-slate-200/80 bg-slate-50/60 flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
                 <div className="relative flex-1 min-w-[220px]">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -802,7 +867,7 @@ export default function SuperAdminClient({
             </div>
           )}
 
-          {/* ================= TAB 3: SUSCRIPCIONES Y PLANES ================= */}
+          {/* ================= TAB 4: SUSCRIPCIONES, RETENCIÓN Y PURGA ================= */}
           {activeTab === 'subscriptions' && (
             <div className="space-y-5">
               {/* Tarjetas de catálogo comercial desde PLAN_CATALOG */}
@@ -847,13 +912,15 @@ export default function SuperAdminClient({
                 })}
               </div>
 
-              {/* Tabla de control de vencimientos */}
+              {/* Tabla de control de vencimientos y retención (30 días) */}
               <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">Control de Vencimientos y Cobranza</h3>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Control de Vencimientos y Política de Retención (30 días)
+                    </h3>
                     <p className="text-xs text-slate-500">
-                      Ordenado por urgencia: cuentas vencidas hace más días aparecen primero
+                      Las cuentas vencidas conservan sus datos 30 días antes de la purga definitiva en cascada
                     </p>
                   </div>
                   {kpis.expiredMerchants.length > 0 && (
@@ -876,8 +943,8 @@ export default function SuperAdminClient({
                         <th className="py-3 px-4 font-semibold">Comercio</th>
                         <th className="py-3 px-4 font-semibold">Plan</th>
                         <th className="py-3 px-4 font-semibold">Estado</th>
-                        <th className="py-3 px-4 font-semibold">Inicio Ciclo</th>
                         <th className="py-3 px-4 font-semibold">Vencimiento / Prórroga</th>
+                        <th className="py-3 px-4 font-semibold">Retención / Purga</th>
                         <th className="py-3 px-4 font-semibold text-right">Acciones</th>
                       </tr>
                     </thead>
@@ -900,10 +967,8 @@ export default function SuperAdminClient({
                                 {badge.label}
                               </span>
                             </td>
-                            <td className="py-3.5 px-4 text-slate-500 tabular-nums">
-                              {formatDatePen(m.snapshot.billingCycleStart)}
-                            </td>
                             <td className="py-3.5 px-4">{renderCycleLabel(m.snapshot)}</td>
+                            <td className="py-3.5 px-4">{renderRetentionPill(m.retention)}</td>
                             <td className="py-3.5 px-4 text-right">
                               <button
                                 type="button"
@@ -911,7 +976,7 @@ export default function SuperAdminClient({
                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
                               >
                                 <Clock size={12} />
-                                Prórroga / Avisar
+                                Gestionar
                               </button>
                             </td>
                           </tr>
@@ -932,10 +997,59 @@ export default function SuperAdminClient({
                   />
                 )}
               </div>
+
+              {/* Auditoría de eventos de retención y purgas definitivas */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Trash2 size={15} className="text-rose-600" />
+                      Auditoría de Retención y Purgas Definitivas
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Registro permanente de avisos, resguardos, prórrogas y comercios eliminados en cascada
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 tabular-nums">
+                    {retentionEvents.length} eventos
+                  </span>
+                </div>
+
+                {retentionEvents.length === 0 ? (
+                  <div className="py-8 px-4 text-center text-xs text-slate-400">
+                    Sin eventos de retención o purga registrados todavía.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {retentionEvents.slice(0, 10).map((ev) => {
+                      const badge = RETENTION_EVENT_LABEL[ev.event_type] ?? {
+                        label: ev.event_type,
+                        className: 'bg-slate-100 text-slate-700 border-slate-200',
+                      };
+                      return (
+                        <div key={ev.id} className="px-5 py-3 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                            <span className="font-bold text-slate-900 truncate">{ev.tenant_name}</span>
+                            <span className="font-mono text-[11px] text-slate-400 truncate">
+                              ({ev.tenant_slug})
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                            {formatDateTimePen(ev.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* ================= TAB 4: HISTORIAL DE NOTIFICACIONES ================= */}
+          {/* ================= TAB 5: HISTORIAL DE NOTIFICACIONES ================= */}
           {activeTab === 'notifications' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -1042,6 +1156,33 @@ export default function SuperAdminClient({
                 : [updated, ...prev];
             })
           }
+          onPaymentRecorded={(updatedSub, tx) => {
+            setSubscriptions((prev) => {
+              const exists = prev.some((s) => s.id === updatedSub.id);
+              return exists
+                ? prev.map((s) => (s.id === updatedSub.id ? updatedSub : s))
+                : [updatedSub, ...prev];
+            });
+            setTransactions((prev) => [tx, ...prev]);
+          }}
+          onTenantPurged={(purgedId, purgedName, purgedSlug) => {
+            setTenants((prev) => prev.filter((t) => t.id !== purgedId));
+            setSubscriptions((prev) => prev.filter((s) => (s.tenant_id || s.restaurant_id) !== purgedId));
+            setMetricsList((prev) => prev.filter((m) => m.tenantId !== purgedId));
+            setRetentionEvents((prev) => [
+              {
+                id: `local-${Date.now()}`,
+                tenant_id: purgedId,
+                tenant_name: purgedName,
+                tenant_slug: purgedSlug,
+                event_type: 'PURGED',
+                channel: 'IN_APP',
+                created_at: new Date().toISOString(),
+              },
+              ...prev,
+            ]);
+            setSelectedTenantId(null);
+          }}
           onNotificationSent={(sent) =>
             setNotifications((prev) => [...sent, ...prev])
           }

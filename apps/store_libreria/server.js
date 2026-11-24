@@ -12,7 +12,7 @@ const path = require('path');
   }
 })();
 
-const PORT = 3002;
+const PORT = Number(process.env.PORT) || 3002;
 const SAAS_URL = process.env.SAAS_URL || 'http://localhost:3000';
 const API_KEY = process.env.DELIVERY_API_KEY || '';
 

@@ -1,0 +1,42 @@
+# Despliegue de las tiendas B2B de demostración en Render (plan gratuito).
+#
+# El panel administrativo y las API viven en Vercel; Supabase cubre la
+# base de datos, autenticación y tiempo real. Render solo aloja los dos
+# clientes de e-commerce que consumen la API server-side.
+#
+# Cada tienda necesita SAAS_URL apuntando al dominio del panel y
+# DELIVERY_API_KEY con la clave emitida desde el panel del comercio.
+services:
+  - type: web
+    name: delivery-store-restaurante
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: apps/store_restaurante
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: SAAS_URL
+        sync: false
+      - key: DELIVERY_API_KEY
+        sync: false
+
+  - type: web
+    name: delivery-store-libreria
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: apps/store_libreria
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: SAAS_URL
+        sync: false
+      - key: DELIVERY_API_KEY
+        sync: false

@@ -75,6 +75,8 @@ export interface Tenant {
   is_suspended?: boolean;
   suspended_at?: string | null;
   suspended_reason?: string | null;
+  retention_extended_until?: string | null;
+  retention_hold?: boolean;
   created_at: string;
 }
 

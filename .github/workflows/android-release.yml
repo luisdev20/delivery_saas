@@ -1,0 +1,75 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile_driver
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Verificar credenciales
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Faltan los secretos SUPABASE_URL y SUPABASE_ANON_KEY del repositorio."
+            exit 1
+          fi
+
+      - name: Compilar APK de producción
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Preparar artefacto
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "dist/deliveryos-driver-${GITHUB_REF_NAME}.apk"
+
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: deliveryos-driver-apk
+          path: apps/mobile_driver/dist/deliveryos-driver-*.apk
+          if-no-files-found: error
+
+      - name: Adjuntar al release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/mobile_driver/dist/deliveryos-driver-*.apk

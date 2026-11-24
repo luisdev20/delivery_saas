@@ -23,9 +23,11 @@ import {
   type BillingTransaction,
   type SubscriptionSnapshot,
 } from '@/lib/subscription';
+import { getRetentionInfo, type RetentionInfo } from '@/lib/retention';
 import AdminSidebar, { type AdminTab } from '@/components/admin/AdminSidebar';
 import AdminTopbar from '@/components/admin/AdminTopbar';
 import SubscriptionBanner from '@/components/admin/SubscriptionBanner';
+import RetentionNotice from '@/components/admin/RetentionNotice';
 import OrderQuotaWidget from '@/components/admin/OrderQuotaWidget';
 import BillingPanel from '@/components/admin/BillingPanel';
 import BusinessSettingsPanel from '@/components/admin/BusinessSettingsPanel';
@@ -142,6 +144,23 @@ export default function AdminDashboardClient({
   const activeDriverCount = useMemo(
     () => drivers.filter((driver) => driver.is_active && !driver.deleted_at).length,
     [drivers]
+  );
+  const retention: RetentionInfo = useMemo(
+    () =>
+      getRetentionInfo({
+        createdAt: currentRestaurant.created_at,
+        subscription: currentSubscription,
+        lastTransaction,
+        extendedUntil: currentRestaurant.retention_extended_until ?? null,
+        hold: Boolean(currentRestaurant.retention_hold),
+      }),
+    [
+      currentRestaurant.created_at,
+      currentRestaurant.retention_extended_until,
+      currentRestaurant.retention_hold,
+      currentSubscription,
+      lastTransaction,
+    ]
   );
   const readOnly = snapshot.readOnly;
   const canCreateOrders = !snapshot.readOnly && !snapshot.quotaReached;
@@ -845,6 +864,9 @@ export default function AdminDashboardClient({
 
         {/* Guard global de suscripción / cuota / prórroga / suspensión */}
         <SubscriptionBanner snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
+
+        {/* Aviso previo de eliminación definitiva de la cuenta */}
+        <RetentionNotice info={retention} onOpenBilling={() => setAdminTab('billing')} />
 
         {/* ================= TAB 1: DASHBOARD (DESPACHOS) ================= */}
         {adminTab === 'dashboard' && (

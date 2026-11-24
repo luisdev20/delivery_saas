@@ -11,7 +11,7 @@ export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: 'Consola de Plataforma — Delivery Tracker SuperAdmin',
-  description: 'Gobernanza de comercios, salud de suscripciones, prórrogas, soporte y notificaciones.',
+  description: 'Gobernanza de comercios, salud de suscripciones, retención con purga, prórrogas y notificaciones.',
 };
 
 export interface TenantMetricsSummary {
@@ -19,6 +19,16 @@ export interface TenantMetricsSummary {
   activeDrivers: number;
   totalAccounts: number;
   ownerEmail: string | null;
+}
+
+export interface RetentionAuditEvent {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  tenant_slug: string;
+  event_type: 'NOTICE' | 'FINAL_NOTICE' | 'PURGED' | 'EXTENDED' | 'HOLD' | 'RELEASED';
+  channel: 'IN_APP' | 'EMAIL';
+  created_at: string;
 }
 
 export default async function SuperAdminPage() {
@@ -43,6 +53,7 @@ export default async function SuperAdminPage() {
     { data: drivers },
     { data: tenantUsers },
     notificationsRes,
+    retentionEventsRes,
     usersRes,
   ] = await Promise.all([
     admin.from('tenants').select('*').order('created_at', { ascending: false }),
@@ -51,6 +62,7 @@ export default async function SuperAdminPage() {
     admin.from('drivers').select('id, tenant_id, is_active, deleted_at'),
     admin.from('tenant_users').select('id, tenant_id, role, user_id'),
     admin.from('tenant_notifications').select('*').order('created_at', { ascending: false }).limit(60),
+    admin.from('tenant_retention_events').select('*').order('created_at', { ascending: false }).limit(60),
     admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
   ]);
 
@@ -93,6 +105,10 @@ export default async function SuperAdminPage() {
     ? []
     : ((notificationsRes.data ?? []) as TenantNotification[]);
 
+  const retentionEvents = retentionEventsRes.error
+    ? []
+    : ((retentionEventsRes.data ?? []) as RetentionAuditEvent[]);
+
   return (
     <SuperAdminClient
       tenants={(tenants ?? []) as Restaurant[]}
@@ -100,6 +116,7 @@ export default async function SuperAdminPage() {
       transactions={(transactions ?? []) as BillingTransaction[]}
       tenantMetrics={Array.from(metricsMap.values())}
       initialNotifications={notifications}
+      initialRetentionEvents={retentionEvents}
       notificationsReady={!notificationsRes.error}
       userEmail={session.email}
     />
