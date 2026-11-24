@@ -92,44 +92,40 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center flex-col p-4 relative"
-      style={{
-        backgroundColor: 'var(--saas-900)',
-        fontFamily: 'Inter, sans-serif',
-      }}
+      className="min-h-screen flex items-center justify-center flex-col p-4 bg-slate-50 relative"
+      style={{ fontFamily: 'Inter, sans-serif' }}
     >
-      {/* Dot pattern overlay */}
+      {/* Subtle architectural grid background */}
       <div
-        className="fixed inset-0 pointer-events-none"
+        className="fixed inset-0 pointer-events-none opacity-60"
         style={{
-          backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.08) 1px, transparent 0)',
-          backgroundSize: '32px 32px',
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(15,23,42,0.08) 1px, transparent 0)',
+          backgroundSize: '28px 28px',
         }}
       />
 
       <div className="relative z-10 w-full max-w-md animate-fade-in space-y-6">
-        {/* Brand header */}
-        <div className="text-center">
-          <div
-            className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-xl text-white"
-            style={{ background: 'var(--saas-600)', border: '1px solid rgba(165,180,252,0.3)' }}
-          >
-            <Truck size={28} color="white" />
+        {/* Brand header alineado a Landing */}
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-slate-900 text-emerald-400 shadow-sm ring-1 ring-slate-900/10">
+            <Truck size={23} />
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Delivery Tracker
-          </h1>
-          <p className="text-sm mt-1" style={{ color: '#A5B4FC' }}>
-            Portal de Acceso
-          </p>
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              Delivery Tracker
+            </h1>
+            <p className="text-xs font-medium text-slate-500 mt-0.5">
+              Consola logística B2B · Inicia sesión con tu cuenta
+            </p>
+          </div>
         </div>
 
         {/* Login card */}
-        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-2xl">
-          <form onSubmit={handleLogin} className="space-y-5">
+        <div className="bg-white p-7 sm:p-8 rounded-2xl border border-slate-200/90 shadow-sm">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="form-group">
-              <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-600" htmlFor="email">
-                Correo Electrónico
+              <label className="form-label text-xs font-semibold text-slate-700" htmlFor="email">
+                Correo electrónico
               </label>
               <input
                 id="email"
@@ -144,11 +140,9 @@ export default function LoginPage() {
             </div>
 
             <div className="form-group">
-              <div className="flex justify-between items-center">
-                <label className="form-label text-xs font-semibold uppercase tracking-wider text-slate-600" htmlFor="password">
-                  Contraseña
-                </label>
-              </div>
+              <label className="form-label text-xs font-semibold text-slate-700" htmlFor="password">
+                Contraseña
+              </label>
               <input
                 id="password"
                 type="password"
@@ -165,7 +159,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="btn btn-indigo btn-full btn-lg font-bold text-sm shadow-md"
+                className="w-full h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
                 id="btn-login"
               >
                 {isLoading ? (
@@ -183,6 +177,10 @@ export default function LoginPage() {
             </div>
           </form>
         </div>
+
+        <p className="text-center text-[11px] text-slate-400">
+          Acceso seguro para comercios, estación KDS y consola de plataforma.
+        </p>
       </div>
     </div>
   );

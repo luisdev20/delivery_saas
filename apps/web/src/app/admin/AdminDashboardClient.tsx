@@ -23,7 +23,8 @@ import {
   type BillingTransaction,
   type SubscriptionSnapshot,
 } from '@/lib/subscription';
-import PlanBadge from '@/components/admin/PlanBadge';
+import AdminSidebar, { type AdminTab } from '@/components/admin/AdminSidebar';
+import AdminTopbar from '@/components/admin/AdminTopbar';
 import SubscriptionBanner from '@/components/admin/SubscriptionBanner';
 import OrderQuotaWidget from '@/components/admin/OrderQuotaWidget';
 import BillingPanel from '@/components/admin/BillingPanel';
@@ -60,16 +61,8 @@ const STATUS_NEXT_LABEL: Record<OrderStatus, string> = {
   CANCELADO:      '',
 };
 
-type AdminTab = 'dashboard' | 'fleet' | 'metrics' | 'billing' | 'settings';
 type FilterTab = 'active' | 'delivered' | 'all';
 type MetricsRange = 'today' | '7days' | 'month' | 'last_month';
-
-interface SidebarNavItem {
-  id: AdminTab;
-  icon: React.ReactNode;
-  label: string;
-  badge?: number;
-}
 
 function timeAgo(dateStr: string): string {
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
@@ -96,7 +89,25 @@ export default function AdminDashboardClient({
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [trackingDrawerOrder, setTrackingDrawerOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dtk_sidebar_collapsed');
+      if (saved === 'true') setSidebarCollapsed(true);
+    } catch {}
+  }, []);
+
+  const handleToggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('dtk_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Suscripción y facturación
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(
@@ -121,8 +132,12 @@ export default function AdminDashboardClient({
 
   // Estado contractual derivado (sidebar, guard global y cuota)
   const snapshot: SubscriptionSnapshot = useMemo(
-    () => getSubscriptionSnapshot(currentSubscription, lastTransaction),
-    [currentSubscription, lastTransaction]
+    () =>
+      getSubscriptionSnapshot(currentSubscription, lastTransaction, new Date(), {
+        isSuspended: Boolean(currentRestaurant.is_suspended),
+        suspendedReason: currentRestaurant.suspended_reason ?? null,
+      }),
+    [currentSubscription, lastTransaction, currentRestaurant.is_suspended, currentRestaurant.suspended_reason]
   );
   const activeDriverCount = useMemo(
     () => drivers.filter((driver) => driver.is_active && !driver.deleted_at).length,
@@ -789,296 +804,101 @@ export default function AdminDashboardClient({
     window.location.href = '/login';
   };
 
-  const sidebarNavItems: SidebarNavItem[] = [
-    { id: 'dashboard', icon: <BarChart2 size={18} />, label: 'Monitor de Despachos', badge: activeCount },
-    { id: 'fleet',     icon: <Users size={18} />,     label: 'Personal Operativo', badge: activeDriverCount },
-    { id: 'metrics',   icon: <TrendingUp size={18} />, label: 'Métricas' },
-    { id: 'billing',   icon: <Receipt size={18} />,   label: 'Suscripción y Facturación' },
-    { id: 'settings',  icon: <Settings size={18} />,  label: 'Configuración del Negocio' },
-  ];
-
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#F1F5F9', fontFamily: 'Inter, sans-serif' }}>
+    <div className="flex h-screen overflow-hidden bg-slate-50" style={{ fontFamily: 'Inter, sans-serif' }}>
 
-      {/* ================= SIDEBAR (SaaS Indigo) ================= */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-30 w-64 bg-indigo-950 text-white flex flex-col shadow-xl transition-transform duration-300
-        md:relative md:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-
-        {/* Brand Header with Store Name */}
-        <div className="p-4 sm:p-5 border-b border-indigo-800/60 space-y-2">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold shadow-md"
-              style={{ background: currentRestaurant.brand_color || 'var(--saas-600)' }}
-            >
-              <Store size={18} color="white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-black text-sm text-white tracking-tight truncate" title={currentRestaurant.name}>
-                {currentRestaurant.name}
-              </h1>
-              <p className="text-[11px] text-indigo-300 font-medium truncate">Consola de Despacho</p>
-            </div>
-          </div>
-
-          {/* Multi-Tenant Switcher */}
-          {allRestaurants && allRestaurants.length > 1 && (
-            <div className="pt-1">
-              <label className="text-[9px] uppercase font-bold text-indigo-400 block mb-1">
-                Comercio:
-              </label>
-              <select
-                value={restaurant.slug}
-                onChange={(e) => {
-                  if (e.target.value === '__hub__') {
-                    window.location.href = '/admin';
-                  } else if (e.target.value === '__superadmin__') {
-                    window.location.href = '/superadmin';
-                  } else {
-                    window.location.href = `/admin/${e.target.value}`;
-                  }
-                }}
-                className="w-full bg-indigo-950 border border-indigo-700/80 text-white rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-              >
-                {allRestaurants.map(r => (
-                  <option key={r.id} value={r.slug} className="bg-indigo-950 text-white font-bold">
-                    {r.name}
-                  </option>
-                ))}
-                <option disabled className="bg-indigo-900 text-indigo-400">──────────</option>
-                <option value="__hub__" className="bg-indigo-950 text-indigo-200">
-                  Ver Todos los Comercios
-                </option>
-                <option value="__superadmin__" className="bg-indigo-950 text-purple-300 font-bold">
-                  Consola SuperAdmin
-                </option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {sidebarNavItems.map(item => {
-            const isActive = adminTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { setAdminTab(item.id); setSelectedOrder(null); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-indigo-200 hover:bg-indigo-900/60 hover:text-white'
-                }`}
-                id={`tab-btn-${item.id}`}
-              >
-                {item.icon}
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge != null && item.badge > 0 && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white bg-indigo-500/80">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* Superadmin: Onboarding link */}
-          {userRole === 'superadmin' && (
-            <div className="pt-1">
-              <a
-                href="/onboarding"
-                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 rounded-lg text-xs font-bold transition-all border border-emerald-500/30 group"
-                id="btn-open-onboarding"
-              >
-                <div className="flex items-center gap-2">
-                  <Plus size={16} className="text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span>Nuevo Comercio</span>
-                </div>
-                <span className="text-[10px] bg-emerald-500/30 px-1.5 py-0.5 rounded text-emerald-200">
-                  Admin
-                </span>
-              </a>
-            </div>
-          )}
-        </nav>
-
-        {/* Perfil del usuario + Plan actual */}
-        <div className="px-4 pb-3 pt-3 border-t border-indigo-800/60 space-y-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-indigo-600/80 border border-indigo-400/30 flex items-center justify-center text-xs font-black text-white shrink-0">
-              {(userEmail || currentRestaurant.name).charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold text-white truncate" title={userEmail || undefined}>
-                {userEmail || 'Usuario del comercio'}
-              </p>
-              <p className="text-[10px] text-indigo-300 capitalize">
-                {userRole === 'superadmin' ? 'Superadmin' : userRole}
-              </p>
-            </div>
-          </div>
-          <PlanBadge snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
-        </div>
-
-        {/* Store Status Toggle */}
-        <div className="p-4 border-t border-indigo-800/60 bg-indigo-950/40">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-indigo-300">
-              Recepción de pedidos
-            </span>
-            {!currentRestaurant.is_open && (
-              <span className="text-[10px] font-black text-red-300">Pausada</span>
-            )}
-          </div>
-          <button
-            onClick={toggleStoreStatus}
-            disabled={togglingOpen}
-            className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${currentRestaurant.is_open ? 'bg-red-600/90 hover:bg-red-700 text-white shadow-xs' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'}`}
-            id="btn-toggle-store"
-          >
-            {togglingOpen ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : currentRestaurant.is_open ? (
-              <>Pausar Despachos</>
-            ) : (
-              <>Reanudar Despachos</>
-            )}
-          </button>
-        </div>
-
-        {/* Logout */}
-        <div className="p-4 border-t border-indigo-800/60">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 hover:bg-red-900/40 text-indigo-300 hover:text-red-300 rounded-lg text-sm transition-colors border border-indigo-800/80"
-          >
-            <LogOut size={16} /> Cerrar Sesión
-          </button>
-        </div>
-      </aside>
-
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+      {/* ================= SIDEBAR COLAPSABLE ================= */}
+      <AdminSidebar
+        restaurant={currentRestaurant}
+        adminTab={adminTab}
+        onSelectTab={(tab) => {
+          setAdminTab(tab);
+          setSelectedOrder(null);
+        }}
+        activeOrdersCount={activeCount}
+        activeDriverCount={activeDriverCount}
+        snapshot={snapshot}
+        userEmail={userEmail}
+        userRole={userRole}
+        onLogout={handleLogout}
+        mobileOpen={sidebarOpen}
+        onCloseMobile={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={handleToggleSidebarCollapse}
+      />
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
 
-        {/* Mobile Topbar */}
-        <header className="flex items-center justify-between px-6 py-3 border-b bg-white md:hidden shrink-0" style={{ borderColor: 'var(--border-color)' }}>
-          <button onClick={() => setSidebarOpen(s => !s)} className="btn btn-ghost btn-sm">
-            <Menu size={20} />
-          </button>
-          <span className="font-bold text-sm text-slate-800">{restaurant.name}</span>
-          <button
-            onClick={toggleStoreStatus}
-            disabled={togglingOpen}
-            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors disabled:opacity-50 ${
-              currentRestaurant.is_open
-                ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-            }`}
-          >
-            {togglingOpen ? '…' : currentRestaurant.is_open ? 'Pausar' : 'Reanudar'}
-          </button>
-        </header>
+        {/* Topbar unificado (estado de recepción + notificaciones Realtime + CTA) */}
+        <AdminTopbar
+          restaurant={currentRestaurant}
+          adminTab={adminTab}
+          snapshot={snapshot}
+          canCreateOrders={canCreateOrders}
+          togglingOpen={togglingOpen}
+          onToggleStoreStatus={toggleStoreStatus}
+          onOpenMobileSidebar={() => setSidebarOpen(true)}
+          onOpenManualModal={() => setShowManualModal(true)}
+          onOpenBilling={() => setAdminTab('billing')}
+        />
 
-        {/* Guard global de suscripción / cuota (persistente en todas las vistas) */}
+        {/* Guard global de suscripción / cuota / prórroga / suspensión */}
         <SubscriptionBanner snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
 
         {/* ================= TAB 1: DASHBOARD (DESPACHOS) ================= */}
         {adminTab === 'dashboard' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            {/* Header */}
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
-              <div>
-                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {currentRestaurant.name}
-                </h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-                  Pedidos, repartidores y entregas del comercio.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowManualModal(true)}
-                  disabled={!canCreateOrders}
-                  title={
-                    readOnly
-                      ? 'Suscripción vencida: renueva tu plan para crear pedidos'
-                      : snapshot.quotaReached
-                        ? 'Límite de pedidos alcanzado para el ciclo actual'
-                        : undefined
-                  }
-                  className="btn btn-indigo text-xs sm:text-sm py-2 px-3.5 shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  id="btn-new-manual-dispatch"
-                >
-                  <PlusCircle size={16} /> + Nuevo Despacho
-                </button>
-                {(readOnly || snapshot.quotaReached) && (
-                  <div
-                    className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                      readOnly
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        readOnly ? 'bg-rose-500' : 'bg-amber-500'
-                      }`}
-                    />
-                    {readOnly ? 'Solo lectura' : 'Cuota agotada'}
-                  </div>
-                )}
-              </div>
-            </header>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 animate-fade-in space-y-5">
 
-            {/* Medidor de cuota mensual */}
-            <OrderQuotaWidget snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
-
-            {/* Stat Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-4 sm:mb-8">
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
-                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-indigo-50 sm:bg-indigo-100 rounded-lg sm:rounded-full flex items-center justify-center text-indigo-600 shrink-0">
-                  <Package size={14} className="sm:hidden" />
-                  <Package size={22} className="hidden sm:block" />
+            {/* KPIs + Cuota Mensual en una sola fila (4 columnas) */}
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+                  <Package size={19} />
                 </div>
-                <div>
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Envíos Hoy</p>
-                  <p className="text-sm sm:text-2xl font-bold text-slate-800 leading-tight mt-0.5 sm:mt-0">{todayCount}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+                    Envíos Hoy
+                  </p>
+                  <p className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight mt-0.5 tabular-nums">
+                    {todayCount}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
-                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-amber-50 sm:bg-amber-100 rounded-lg sm:rounded-full flex items-center justify-center text-amber-600 shrink-0">
-                  <Truck size={14} className="sm:hidden" />
-                  <Truck size={22} className="hidden sm:block" />
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
+                <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600 shrink-0">
+                  <Truck size={19} />
                 </div>
-                <div>
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">En Ruta</p>
-                  <p className="text-sm sm:text-2xl font-bold text-amber-600 leading-tight mt-0.5 sm:mt-0">{enRutaCount}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+                    En Ruta
+                  </p>
+                  <p className="text-xl sm:text-2xl font-extrabold text-sky-700 leading-tight mt-0.5 tabular-nums">
+                    {enRutaCount}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 text-center sm:text-left">
-                <div className="w-7 h-7 sm:w-12 sm:h-12 bg-emerald-50 sm:bg-emerald-100 rounded-lg sm:rounded-full flex items-center justify-center text-emerald-600 shrink-0">
-                  <Boxes size={14} className="sm:hidden" />
-                  <Boxes size={22} className="hidden sm:block" />
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
+                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                  <Boxes size={19} />
                 </div>
-                <div>
-                  <p className="text-[10px] sm:text-sm text-slate-500 font-semibold leading-tight">Listos</p>
-                  <p className="text-sm sm:text-2xl font-bold text-emerald-600 leading-tight mt-0.5 sm:mt-0">{listosCount}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+                    Listos
+                  </p>
+                  <p className="text-xl sm:text-2xl font-extrabold text-emerald-700 leading-tight mt-0.5 tabular-nums">
+                    {listosCount}
+                  </p>
                 </div>
               </div>
+
+              <OrderQuotaWidget snapshot={snapshot} onOpenBilling={() => setAdminTab('billing')} />
             </div>
 
             {/* Orders Table Container */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
               {/* Filter Tabs & Quick Actions */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 p-2 gap-2 bg-slate-50/50">
                 <div className="flex gap-1 overflow-x-auto">
@@ -1427,28 +1247,25 @@ export default function AdminDashboardClient({
 
         {/* ================= TAB 4: METRICS ================= */}
         {adminTab === 'metrics' && (
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 animate-fade-in">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 animate-fade-in">
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
               <div>
-                <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                    {currentRestaurant.name}
-                  </h2>
-                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Métricas de Rendimiento
-                  </span>
-                </div>
-                <p className="text-sm text-slate-500 mt-0.5">Análisis operativo del motor logístico</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Rango de análisis
+                </p>
+                <p className="text-sm text-slate-600 mt-0.5">
+                  Compara entregas, recaudación, tiempos y desempeño del equipo
+                </p>
               </div>
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+              <div className="flex gap-1 bg-white border border-slate-200/80 p-1 rounded-xl shadow-2xs">
                 {([['today', 'Hoy'], ['7days', '7 días'], ['month', 'Este mes'], ['last_month', 'Mes anterior']] as const).map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => setMetricsRange(key)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       metricsRange === key
-                        ? 'bg-white text-indigo-700 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >{label}</button>
                 ))}
@@ -1456,27 +1273,27 @@ export default function AdminDashboardClient({
             </header>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
               {[
-                { label: 'Despachos', value: metricsData.totalOrders, icon: <Package size={20} />, color: '#4F46E5', bg: '#EEF2FF' },
-                { label: 'Monto Total', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={20} />, color: '#059669', bg: '#ECFDF5' },
-                { label: 'Tiempo prom. ciclo', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={20} />, color: '#D97706', bg: '#FFFBEB' },
-                { label: 'Tasa de éxito', value: `${metricsData.successRate}%`, icon: <Target size={20} />, color: '#7C3AED', bg: '#F5F3FF' },
+                { label: 'Despachos', value: metricsData.totalOrders, icon: <Package size={19} />, color: '#4F46E5', bg: '#EEF2FF' },
+                { label: 'Monto Total', value: `S/ ${metricsData.totalRevenue.toFixed(2)}`, icon: <DollarSign size={19} />, color: '#059669', bg: '#ECFDF5' },
+                { label: 'Tiempo prom. ciclo', value: `${metricsData.avgDeliveryTime} min`, icon: <Timer size={19} />, color: '#D97706', bg: '#FFFBEB' },
+                { label: 'Tasa de éxito', value: `${metricsData.successRate}%`, icon: <Target size={19} />, color: '#7C3AED', bg: '#F5F3FF' },
               ].map(kpi => (
-                <div key={kpi.label} className="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-100">
+                <div key={kpi.label} className="bg-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200/80">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: kpi.bg, color: kpi.color }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: kpi.bg, color: kpi.color }}>
                       {kpi.icon}
                     </div>
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{kpi.label}</span>
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{kpi.label}</span>
                   </div>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-800">{kpi.value}</p>
+                  <p className="text-xl sm:text-2xl font-extrabold text-slate-900 tabular-nums">{kpi.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Pedidos por Repartidor: totales históricos y desglose por día */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 mb-6">
+            <div className="bg-white rounded-2xl p-5 shadow-2xs border border-slate-200/80 mb-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div>
                   <h3 className="font-bold text-sm text-slate-700">Pedidos por Repartidor</h3>

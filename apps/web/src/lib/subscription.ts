@@ -19,7 +19,7 @@ export const PLAN_CATALOG: Record<
 
 export const PAID_PLANS: PlanType[] = ['STARTER', 'GROWTH', 'ENTERPRISE'];
 
-export type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'EXPIRED' | 'NONE';
+export type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'GRACE' | 'EXPIRED' | 'SUSPENDED' | 'NONE';
 export type QuotaState = 'normal' | 'warning' | 'exhausted';
 
 export type PaymentMethodLabel = 'YAPE' | 'TARJETA' | 'TRIAL';
@@ -37,6 +37,11 @@ export interface BillingTransaction {
   created_at: string;
 }
 
+export interface SubscriptionSnapshotOptions {
+  isSuspended?: boolean;
+  suspendedReason?: string | null;
+}
+
 export interface SubscriptionSnapshot {
   hasSubscription: boolean;
   plan: PlanType;
@@ -50,12 +55,19 @@ export interface SubscriptionSnapshot {
   status: SubscriptionStatus;
   statusLabel: string;
   isTrial: boolean;
+  isGrace: boolean;
+  isSuspended: boolean;
+  suspendedReason: string | null;
+  graceUntil: string | null;
+  graceUntilLabel: string | null;
+  graceReason: string | null;
   isExpired: boolean;
   isActive: boolean;
   billingCycleStart: string | null;
   periodEnd: string | null;
   renewalDateLabel: string;
   daysRemaining: number;
+  daysOverdue: number;
   /** Bloquea creación/edición de pedidos y asignación de motorizados. */
   readOnly: boolean;
   /** Bloquea únicamente la creación de nuevos pedidos. */
@@ -155,8 +167,12 @@ export function subscriptionPeriodEnd(
 export function getSubscriptionSnapshot(
   subscription: Subscription | null,
   lastTransaction: BillingTransaction | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options?: SubscriptionSnapshotOptions
 ): SubscriptionSnapshot {
+  const isSuspended = Boolean(options?.isSuspended);
+  const suspendedReason = options?.suspendedReason ?? null;
+
   if (!subscription) {
     return {
       hasSubscription: false,
@@ -168,15 +184,22 @@ export function getSubscriptionSnapshot(
       ordersThisMonth: 0,
       usagePercent: 0,
       quotaState: 'normal',
-      status: 'NONE',
-      statusLabel: 'Sin suscripción',
+      status: isSuspended ? 'SUSPENDED' : 'NONE',
+      statusLabel: isSuspended ? 'Suspendida' : 'Sin suscripción',
       isTrial: false,
+      isGrace: false,
+      isSuspended,
+      suspendedReason,
+      graceUntil: null,
+      graceUntilLabel: null,
+      graceReason: null,
       isExpired: true,
       isActive: false,
       billingCycleStart: null,
       periodEnd: null,
       renewalDateLabel: '—',
       daysRemaining: 0,
+      daysOverdue: 0,
       readOnly: true,
       quotaReached: false,
     };
@@ -192,14 +215,38 @@ export function getSubscriptionSnapshot(
 
   const periodEnd = subscriptionPeriodEnd(subscription, isTrial);
   const periodEndIso = periodEnd.toISOString();
-  const isExpired = subscription.is_active === false || now.getTime() >= periodEnd.getTime();
+
+  const graceDate = subscription.grace_until ? new Date(subscription.grace_until) : null;
+  const hasValidGrace = Boolean(
+    graceDate &&
+      !Number.isNaN(graceDate.getTime()) &&
+      graceDate.getTime() > now.getTime() &&
+      subscription.is_active !== false &&
+      !isSuspended
+  );
+
+  const cycleExpired = subscription.is_active === false || now.getTime() >= periodEnd.getTime();
+  const isGrace = cycleExpired && hasValidGrace;
+  const isExpired = isSuspended || (cycleExpired && !hasValidGrace);
+
+  const effectiveEnd = isGrace && graceDate ? graceDate : periodEnd;
   const daysRemaining = isExpired
     ? 0
-    : Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / DAY_MS));
+    : Math.max(0, Math.ceil((effectiveEnd.getTime() - now.getTime()) / DAY_MS));
+  const daysOverdue =
+    !isGrace && now.getTime() > periodEnd.getTime()
+      ? Math.max(1, Math.floor((now.getTime() - periodEnd.getTime()) / DAY_MS))
+      : 0;
 
   let status: SubscriptionStatus;
   let statusLabel: string;
-  if (isExpired) {
+  if (isSuspended) {
+    status = 'SUSPENDED';
+    statusLabel = 'Suspendida';
+  } else if (isGrace) {
+    status = 'GRACE';
+    statusLabel = 'En prórroga';
+  } else if (isExpired) {
     status = 'EXPIRED';
     statusLabel = isTrial ? 'Prueba vencida' : 'Vencido';
   } else if (isTrial) {
@@ -223,12 +270,19 @@ export function getSubscriptionSnapshot(
     status,
     statusLabel,
     isTrial,
+    isGrace,
+    isSuspended,
+    suspendedReason,
+    graceUntil: subscription.grace_until ?? null,
+    graceUntilLabel: graceDate && !Number.isNaN(graceDate.getTime()) ? formatDatePen(graceDate) : null,
+    graceReason: subscription.grace_reason ?? null,
     isExpired,
-    isActive: subscription.is_active !== false,
+    isActive: subscription.is_active !== false && !isSuspended,
     billingCycleStart: subscription.billing_cycle_start,
     periodEnd: periodEndIso,
     renewalDateLabel: formatDatePen(periodEnd),
     daysRemaining,
+    daysOverdue,
     readOnly: isExpired,
     quotaReached: quotaState === 'exhausted',
   };

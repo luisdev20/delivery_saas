@@ -1,88 +1,92 @@
 'use client';
 
-import { ChevronRight, CreditCard, ShieldCheck, Sparkles } from 'lucide-react';
+import { ChevronRight, CreditCard, ShieldCheck, AlertCircle, Clock } from 'lucide-react';
 import type { SubscriptionSnapshot } from '@/lib/subscription';
 
 interface Props {
   snapshot: SubscriptionSnapshot;
   onOpenBilling: () => void;
+  collapsed?: boolean;
 }
 
-export default function PlanBadge({ snapshot, onOpenBilling }: Props) {
+export default function PlanBadge({ snapshot, onOpenBilling, collapsed = false }: Props) {
+  const isSuspended = snapshot.isSuspended;
   const isExpired = snapshot.isExpired;
-  const isGrowth = snapshot.plan === 'GROWTH' && !isExpired;
+  const isGrace = snapshot.isGrace;
   const isEnterprise = snapshot.plan === 'ENTERPRISE' && !isExpired;
+  const isGrowth = snapshot.plan === 'GROWTH' && !isExpired;
 
-  const containerClass = isExpired
-    ? 'border-rose-400/60 bg-rose-500/10'
-    : isEnterprise
-      ? 'border-amber-400/50 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 ring-1 ring-amber-300/20'
-      : isGrowth
-        ? 'border-emerald-500/50 bg-emerald-500/10'
-        : 'border-slate-500/60 bg-indigo-900/40';
+  const statusTone = isSuspended || isExpired
+    ? 'border-rose-400/35 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15'
+    : isGrace
+      ? 'border-amber-400/35 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15'
+      : isEnterprise
+        ? 'border-amber-300/30 bg-white/[0.06] text-amber-200 hover:bg-white/[0.10]'
+        : isGrowth
+          ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15'
+          : 'border-white/10 bg-white/[0.05] text-indigo-100 hover:bg-white/[0.09]';
 
-  const labelClass = isExpired
-    ? 'text-rose-200'
-    : isEnterprise
-      ? 'text-amber-200'
-      : isGrowth
-        ? 'text-emerald-200'
-        : 'text-indigo-100';
+  const dotClass = isSuspended || isExpired
+    ? 'bg-rose-400'
+    : isGrace
+      ? 'bg-amber-400'
+      : 'bg-emerald-400';
+
+  const statusSubtitle = !snapshot.hasSubscription
+    ? 'Sin contrato'
+    : isSuspended
+      ? 'Suspendida'
+      : isGrace
+        ? `Prórroga · ${snapshot.daysRemaining}d`
+        : isExpired
+          ? `Venció ${snapshot.renewalDateLabel}`
+          : snapshot.isTrial
+            ? `Prueba · ${snapshot.daysRemaining}d`
+            : `Renueva ${snapshot.renewalDateLabel}`;
+
+  const Icon = isSuspended || isExpired
+    ? AlertCircle
+    : isGrace
+      ? Clock
+      : isEnterprise
+        ? ShieldCheck
+        : CreditCard;
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={onOpenBilling}
+        id="sidebar-plan-badge"
+        title={`Plan ${snapshot.planLabel} · ${statusSubtitle}`}
+        className={`relative w-10 h-10 mx-auto rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${statusTone}`}
+      >
+        <Icon size={16} />
+        <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${dotClass}`} />
+      </button>
+    );
+  }
 
   return (
     <button
       type="button"
       onClick={onOpenBilling}
-      className={`w-full text-left rounded-xl border p-3 transition-all hover:brightness-110 ${containerClass}`}
       id="sidebar-plan-badge"
       title="Ver suscripción y facturación"
+      className={`w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl border text-left transition-colors cursor-pointer ${statusTone}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-              isEnterprise ? 'bg-amber-400/20 text-amber-200' : 'bg-white/10 text-white'
-            }`}
-          >
-            {isEnterprise ? <ShieldCheck size={15} /> : <CreditCard size={15} />}
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-white/50">
-              Plan actual
-            </p>
-            <p className={`text-sm font-black truncate ${labelClass}`}>
-              {snapshot.planLabel}
-              {isEnterprise && (
-                <span className="ml-1.5 text-[9px] font-black uppercase text-amber-300/90">
-                  Institucional
-                </span>
-              )}
-            </p>
-          </div>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold truncate leading-tight">
+            Plan {snapshot.planLabel}
+          </p>
+          <p className="text-[10px] text-white/60 truncate leading-tight mt-0.5 tabular-nums">
+            {statusSubtitle}
+          </p>
         </div>
-        <ChevronRight size={14} className="text-white/40 shrink-0 mt-1" />
       </div>
-
-      <p className="mt-2 text-[10px] font-semibold text-white/70">
-        {!snapshot.hasSubscription
-          ? 'Sin contrato activo'
-          : snapshot.isExpired
-            ? `Venció ${snapshot.renewalDateLabel}`
-            : snapshot.isTrial
-              ? `Prueba · ${snapshot.daysRemaining} día${snapshot.daysRemaining === 1 ? '' : 's'}`
-              : snapshot.periodEnd
-                ? `Renueva ${snapshot.renewalDateLabel}`
-                : 'Sin ciclo de cobro'}
-      </p>
-
-      {!snapshot.isExpired && !snapshot.isTrial && snapshot.daysRemaining <= 5 && (
-        <p className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-amber-200">
-          <Sparkles size={10} />
-          {snapshot.daysRemaining === 0
-            ? 'Vence hoy'
-            : `Quedan ${snapshot.daysRemaining} día${snapshot.daysRemaining === 1 ? '' : 's'}`}
-        </p>
-      )}
+      <ChevronRight size={14} className="text-white/40 shrink-0" />
     </button>
   );
 }

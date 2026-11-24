@@ -1,30 +1,36 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Oswald:wght@300;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
+  --color-saas-950: #1E1B4B;
   --color-saas-900: #312E81;
   --color-saas-700: #3730A3;
   --color-saas-600: #4F46E5;
-  --color-saas-100: #F1F5F9;
-  --color-brand-500: #960000;
-  --color-brand-600: #780000;
-  --color-accent-gold: #F2AE24;
+  --color-saas-100: #F8FAFC;
+  --color-platform-950: #0F172A;
+  --color-platform-900: #1E293B;
 }
 
 :root {
-  --brand-primary: #960000;
-  --brand-accent: #F2AE24;
+  --saas-950: #1E1B4B;
   --saas-900: #312E81;
   --saas-700: #3730A3;
   --saas-600: #4F46E5;
-  --saas-100: #F1F5F9;
+  --saas-100: #F8FAFC;
+  --platform-950: #0F172A;
+  --border-color: #E2E8F0;
 }
 
 html, body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #F1F5F9;
-  color: #1E293B;
+  background-color: #F8FAFC;
+  color: #0F172A;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Status Badges */
@@ -34,7 +40,7 @@ html, body {
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.025em;
@@ -43,7 +49,7 @@ html, body {
 .badge-RECIBIDO       { background-color: #EFF6FF; color: #1D4ED8; }
 .badge-EN_PREPARACION { background-color: #FEF3C7; color: #B45309; }
 .badge-LISTO          { background-color: #F5F3FF; color: #6D28D9; }
-.badge-EN_CAMINO      { background-color: #FEF3C7; color: #B45309; }
+.badge-EN_CAMINO      { background-color: #E0F2FE; color: #0369A1; }
 .badge-ENTREGADO      { background-color: #D1FAE5; color: #047857; }
 .badge-CANCELADO      { background-color: #FEE2E2; color: #B91C1C; }
 

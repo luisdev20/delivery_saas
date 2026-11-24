@@ -42,14 +42,19 @@ export default async function AdminMerchantPage({ params }: Props) {
   const userRole = session.role ?? 'owner';
   const userTenant = session.tenantSlug;
 
+  // Role Guard: El superadmin gobierna desde /superadmin y no accede a datos privados del comercio
+  if (userRole === 'superadmin') {
+    redirect('/superadmin');
+  }
+
   // Role Guard: Si es usuario de empaque, redirigir a su estación de empaque
   if (userRole === 'packing') {
     redirect(`/packing/${userTenant || slug}`);
   }
 
   // Multi-Tenant RBAC Security Guard:
-  // Si el usuario no es superadmin y no coincide con el slug del comercio en URL, bloquear acceso
-  if (userRole !== 'superadmin' && userTenant && userTenant !== slug && userTenant !== 'all') {
+  // Si el comercio asignado no coincide con el slug en URL, bloquear acceso
+  if (userTenant && userTenant !== slug && userTenant !== 'all') {
     redirect(`/admin/${userTenant}`);
   }
 
@@ -108,7 +113,7 @@ export default async function AdminMerchantPage({ params }: Props) {
   return (
     <AdminDashboardClient
       restaurant={restaurant}
-      allRestaurants={userRole === 'superadmin' ? (allRestaurants as Restaurant[]) || [] : []}
+      allRestaurants={[]}
       drivers={(drivers as Driver[]) || []}
       subscription={subscription}
       lastTransaction={lastTransaction}

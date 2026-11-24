@@ -1,361 +1,153 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-  ShieldCheck, Store, Plus, TrendingUp, ExternalLink,
-  CreditCard, LogOut, Boxes, X, Loader2, CheckCircle2,
-  MapPin, Navigation, Search,
+  Store,
+  Plus,
+  AlertTriangle,
+  Wallet,
+  Users,
+  Search,
+  Menu,
+  Bell,
+  Clock,
+  SlidersHorizontal,
+  CheckCircle2,
+  Send,
+  Loader2,
+  ShieldAlert,
+  Lock,
+  ArrowRight,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { Restaurant, Subscription } from '@/lib/supabase/types';
-import { PLAN_LIMITS } from '@/lib/supabase/types';
-
-interface OrderSummary {
-  id: string;
-  tenant_id?: string;
-  restaurant_id?: string;
-  status: string;
-  total_amount: number;
-  created_at: string;
-}
+import type {
+  PlanType,
+  Restaurant,
+  Subscription,
+  TenantNotification,
+} from '@/lib/supabase/types';
+import {
+  PLAN_CATALOG,
+  PAID_PLANS,
+  getSubscriptionSnapshot,
+  formatPen,
+  formatDatePen,
+  formatDateTimePen,
+  type BillingTransaction,
+  type SubscriptionSnapshot,
+  type SubscriptionStatus,
+} from '@/lib/subscription';
+import type { TenantMetricsSummary } from './page';
+import SuperAdminSidebar, { type SuperAdminTab } from '@/components/superadmin/SuperAdminSidebar';
+import MerchantGovernanceDrawer from '@/components/superadmin/MerchantGovernanceDrawer';
+import CreateMerchantModal from '@/components/superadmin/CreateMerchantModal';
+import SuperAdminMetricsView from '@/components/superadmin/SuperAdminMetricsView';
+import TablePagination from '@/components/superadmin/TablePagination';
 
 interface Props {
-  restaurants: Restaurant[];
+  tenants: Restaurant[];
   subscriptions: Subscription[];
-  orders: OrderSummary[];
+  transactions: BillingTransaction[];
+  tenantMetrics: TenantMetricsSummary[];
+  initialNotifications: TenantNotification[];
+  notificationsReady: boolean;
+  userEmail?: string | null;
 }
 
+interface EnrichedMerchant {
+  tenant: Restaurant;
+  subscription: Subscription | null;
+  lastTransaction: BillingTransaction | null;
+  transactions: BillingTransaction[];
+  snapshot: SubscriptionSnapshot;
+  metrics: TenantMetricsSummary;
+}
+
+const TAB_HEADER: Record<SuperAdminTab, { title: string; subtitle: string }> = {
+  overview: {
+    title: 'Resumen de Plataforma',
+    subtitle: 'Salud de suscripciones, ingresos SaaS y comercios que requieren atención',
+  },
+  metrics: {
+    title: 'Métricas de Plataforma',
+    subtitle: 'Evolución de ingresos SaaS, distribución por plan, altas y salud de cartera',
+  },
+  merchants: {
+    title: 'Directorio de Comercios',
+    subtitle: 'Gobernanza de cuentas, capacidad operativa, soporte y prórrogas',
+  },
+  subscriptions: {
+    title: 'Suscripciones y Vencimientos',
+    subtitle: 'Control de ciclos comerciales, alertas de cobranza y distribución de planes',
+  },
+  notifications: {
+    title: 'Notificaciones Enviadas',
+    subtitle: 'Historial de avisos internos entregados en tiempo real a los comercios',
+  },
+};
+
+const STATUS_BADGE: Record<SubscriptionStatus, { label: string; className: string }> = {
+  ACTIVE: { label: 'Activo', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  TRIAL: { label: 'Prueba 14d', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  GRACE: { label: 'Prórroga', className: 'bg-amber-50 text-amber-800 border-amber-200' },
+  EXPIRED: { label: 'Vencido', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  SUSPENDED: { label: 'Suspendido', className: 'bg-slate-900 text-white border-slate-900' },
+  NONE: { label: 'Sin plan', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
+
 export default function SuperAdminClient({
-  restaurants: initialRestaurants,
+  tenants: initialTenants,
   subscriptions: initialSubscriptions,
-  orders,
+  transactions: initialTransactions,
+  tenantMetrics: initialMetrics,
+  initialNotifications,
+  notificationsReady,
+  userEmail,
 }: Props) {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
+  const [tenants, setTenants] = useState<Restaurant[]>(initialTenants);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(initialSubscriptions);
-  const [activeTab, setActiveTab] = useState<'merchants' | 'subscriptions'>('merchants');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<BillingTransaction[]>(initialTransactions);
+  const [metricsList, setMetricsList] = useState<TenantMetricsSummary[]>(initialMetrics);
+  const [notifications, setNotifications] = useState<TenantNotification[]>(initialNotifications);
 
-  // Modal State
+  const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [newMerchantName, setNewMerchantName] = useState('');
-  const [newMerchantSlug, setNewMerchantSlug] = useState('');
-  const [newMerchantAddress, setNewMerchantAddress] = useState('Av. Benavides 1240, Miraflores, Lima');
-  const [newMerchantRadius, setNewMerchantRadius] = useState('10');
-  const [newMerchantPlan, setNewMerchantPlan] = useState<'STARTER' | 'GROWTH' | 'ENTERPRISE'>('GROWTH');
-  const [newMerchantLat, setNewMerchantLat] = useState(-12.0864);
-  const [newMerchantLng, setNewMerchantLng] = useState(-77.0328);
-  // Plan Modal State
-  const [showPlanModal, setShowPlanModal] = useState(false);
-  const [selectedMerchantForPlan, setSelectedMerchantForPlan] = useState<Restaurant | null>(null);
-  const [selectedPlanKey, setSelectedPlanKey] = useState<'STARTER' | 'GROWTH' | 'ENTERPRISE'>('GROWTH');
-  const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
-  const mapInstanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const circleRef = useRef<any>(null);
+  // Filtros y paginación
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | SubscriptionStatus>('ALL');
+  const [planFilter, setPlanFilter] = useState<'ALL' | PlanType>('ALL');
+  const [sendingBulk, setSendingBulk] = useState(false);
 
-  const supabase = createClient();
+  const [merchantsPage, setMerchantsPage] = useState(1);
+  const [merchantsPageSize, setMerchantsPageSize] = useState(10);
+  const [subsPage, setSubsPage] = useState(1);
+  const [subsPageSize, setSubsPageSize] = useState(10);
+  const [notifsPage, setNotifsPage] = useState(1);
+  const [notifsPageSize, setNotifsPageSize] = useState(10);
 
-  const totalDelivered = orders.filter(o => o.status === 'ENTREGADO').length;
-  const totalVolume = orders.filter(o => o.status === 'ENTREGADO').reduce((sum, o) => sum + (o.total_amount || 0), 0);
+  const supabase = useMemo(() => createClient(), []);
 
-  // Initialize and update Leaflet map when modal is opened
   useEffect(() => {
-    if (!showCreateModal) return;
+    try {
+      const saved = localStorage.getItem('dtk_superadmin_sidebar_collapsed');
+      if (saved === 'true') setCollapsed(true);
+    } catch {}
+  }, []);
 
-    let isMounted = true;
-
-    // Load Leaflet dynamically
-    import('leaflet').then((L) => {
-      if (!isMounted) return;
-
-      const container = document.getElementById('merchant-map-picker');
-      if (!container) return;
-
-      if (!mapInstanceRef.current) {
-        const map = L.map('merchant-map-picker').setView([newMerchantLat, newMerchantLng], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors',
-          maxZoom: 19,
-        }).addTo(map);
-
-        const redPinIcon = L.divIcon({
-          className: 'custom-merchant-pin',
-          html: `
-            <div style="background-color: #DC2626; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 12px rgba(220,38,38,0.5); border: 2.5px solid white;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-            </div>
-          `,
-          iconSize: [34, 34],
-          iconAnchor: [17, 34],
-        });
-
-        const marker = L.marker([newMerchantLat, newMerchantLng], {
-          draggable: true,
-          icon: redPinIcon,
-        }).addTo(map);
-
-        const radiusMeters = (parseFloat(newMerchantRadius) || 10) * 1000;
-        const circle = L.circle([newMerchantLat, newMerchantLng], {
-          radius: radiusMeters,
-          color: '#4F46E5',
-          fillColor: '#6366F1',
-          fillOpacity: 0.15,
-          weight: 2,
-          dashArray: '5, 5',
-        }).addTo(map);
-
-        const reverseGeocode = async (lat: number, lng: number) => {
-          try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-            const data = await res.json();
-            if (data && data.address) {
-              const street = data.address.road || data.address.pedestrian || data.address.street || '';
-              const houseNumber = data.address.house_number ? ` ${data.address.house_number}` : '';
-              const district = data.address.suburb || data.address.city_district || data.address.neighbourhood || '';
-              const city = data.address.city || data.address.town || data.address.county || 'Lima';
-
-              let cleanAddress = '';
-              if (street) {
-                cleanAddress = `${street}${houseNumber}${district ? `, ${district}` : ''}, ${city}`;
-              } else if (data.display_name) {
-                cleanAddress = data.display_name.split(',').slice(0, 3).join(',').trim();
-              }
-
-              if (cleanAddress) {
-                setNewMerchantAddress(cleanAddress);
-              }
-            }
-          } catch {}
-        };
-
-        marker.on('dragend', (event: any) => {
-          const position = event.target.getLatLng();
-          const lat = parseFloat(position.lat.toFixed(6));
-          const lng = parseFloat(position.lng.toFixed(6));
-          setNewMerchantLat(lat);
-          setNewMerchantLng(lng);
-          circle.setLatLng(position);
-          reverseGeocode(lat, lng);
-        });
-
-        map.on('click', (e: any) => {
-          marker.setLatLng(e.latlng);
-          circle.setLatLng(e.latlng);
-          const lat = parseFloat(e.latlng.lat.toFixed(6));
-          const lng = parseFloat(e.latlng.lng.toFixed(6));
-          setNewMerchantLat(lat);
-          setNewMerchantLng(lng);
-          reverseGeocode(lat, lng);
-        });
-
-        mapInstanceRef.current = map;
-        markerRef.current = marker;
-        circleRef.current = circle;
-
-        setTimeout(() => {
-          map.invalidateSize();
-        }, 200);
-      }
+  const handleToggleCollapse = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('dtk_superadmin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
     });
-
-    if (!document.getElementById('leaflet-css-superadmin')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css-superadmin';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-
-    return () => {
-      isMounted = false;
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        markerRef.current = null;
-        circleRef.current = null;
-      }
-    };
-  }, [showCreateModal]);
-
-  // Update map radius when input changes
-  useEffect(() => {
-    if (circleRef.current) {
-      const radiusMeters = (parseFloat(newMerchantRadius) || 10) * 1000;
-      circleRef.current.setRadius(radiusMeters);
-    }
-  }, [newMerchantRadius]);
-
-  // Geocode address via OpenStreetMap Nominatim
-  const handleGeocodeAddress = async () => {
-    if (!newMerchantAddress.trim()) return;
-    setIsGeocoding(true);
-    try {
-      const query = encodeURIComponent(`${newMerchantAddress}, Lima, Perú`);
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
-        setNewMerchantLat(lat);
-        setNewMerchantLng(lng);
-
-        if (mapInstanceRef.current && markerRef.current && circleRef.current) {
-          const latLng = [lat, lng];
-          mapInstanceRef.current.setView(latLng, 14);
-          markerRef.current.setLatLng(latLng);
-          circleRef.current.setLatLng(latLng);
-        }
-        toast.success('Ubicación encontrada en el mapa');
-      } else {
-        toast.info('No se encontró la dirección exacta. Puede arrastrar el marcador manualmente.');
-      }
-    } catch {
-      toast.info('Arrastre el marcador en el mapa para fijar las coordenadas.');
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  const handleToggleMerchantStatus = async (restaurant: Restaurant) => {
-    setUpdatingId(restaurant.id);
-    const newStatus = !restaurant.is_open;
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ is_open: newStatus })
-        .eq('id', restaurant.id);
-
-      if (error) throw error;
-      setRestaurants(prev => prev.map(r => r.id === restaurant.id ? { ...r, is_open: newStatus } : r));
-      toast.success(`${restaurant.name} marcado como ${newStatus ? 'ACTIVO' : 'PAUSADO'}`);
-    } catch {
-      toast.error('Error al actualizar el estado del comercio');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleCreateMerchant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMerchantName || !newMerchantSlug) {
-      toast.error('Nombre e identificador son obligatorios.');
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      const cleanSlug = newMerchantSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
-      const radiusKm = parseFloat(newMerchantRadius) || 10;
-
-      // 1. Insert into tenants with full schema
-      const fullPayload = {
-        name: newMerchantName.trim(),
-        slug: cleanSlug,
-        phone: '988000000',
-        address: newMerchantAddress.trim() || 'Lima, Perú',
-        lat: newMerchantLat,
-        lng: newMerchantLng,
-        max_delivery_radius_km: radiusKm,
-        brand_color: '#4F46E5',
-        is_open: true,
-      };
-
-      const { data: createdRestaurant, error: err1 } = await supabase
-        .from('tenants')
-        .insert(fullPayload)
-        .select()
-        .single();
-
-      if (err1 || !createdRestaurant) {
-        throw new Error(err1?.message || 'Error al crear el comercio');
-      }
-
-      // 2. Insert subscription
-      const planLimits = PLAN_LIMITS[newMerchantPlan];
-      const { data: createdSub } = await supabase
-        .from('subscriptions')
-        .insert({
-          tenant_id: createdRestaurant.id,
-          plan: newMerchantPlan,
-          max_orders_per_month: planLimits.maxOrders,
-          max_drivers: planLimits.maxDrivers,
-          orders_this_month: 0,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      // Update local state
-      setRestaurants(prev => [createdRestaurant as Restaurant, ...prev]);
-      if (createdSub) {
-        setSubscriptions(prev => [createdSub as Subscription, ...prev]);
-      }
-
-      toast.success(`Comercio "${createdRestaurant.name}" registrado con éxito`);
-      setShowCreateModal(false);
-      setNewMerchantName('');
-      setNewMerchantSlug('');
-      setNewMerchantAddress('Av. Benavides 1240, Miraflores, Lima');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error desconocido al registrar comercio';
-      toast.error(message);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleUpdatePlan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMerchantForPlan) return;
-
-    setIsUpdatingPlan(true);
-    try {
-      const planConfig = PLAN_LIMITS[selectedPlanKey];
-      const existingSub = subscriptions.find(s => (s.tenant_id || s.restaurant_id) === selectedMerchantForPlan.id);
-
-      if (existingSub) {
-        const { error } = await supabase
-          .from('subscriptions')
-          .update({
-            plan: selectedPlanKey,
-            max_orders_per_month: planConfig.maxOrders,
-            max_drivers: planConfig.maxDrivers,
-          })
-          .eq('id', existingSub.id);
-
-        if (error) throw error;
-        setSubscriptions(prev => prev.map(s => s.id === existingSub.id ? { ...s, plan: selectedPlanKey, max_orders_per_month: planConfig.maxOrders, max_drivers: planConfig.maxDrivers } : s));
-      } else {
-        const { data: newSub, error } = await supabase
-          .from('subscriptions')
-          .insert({
-            tenant_id: selectedMerchantForPlan.id,
-            plan: selectedPlanKey,
-            max_orders_per_month: planConfig.maxOrders,
-            max_drivers: planConfig.maxDrivers,
-            orders_this_month: 0,
-            is_active: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (newSub) setSubscriptions(prev => [newSub as Subscription, ...prev]);
-      }
-
-      toast.success(`Plan de "${selectedMerchantForPlan.name}" actualizado a ${planConfig.label}`);
-      setShowPlanModal(false);
-    } catch {
-      toast.error('Error al actualizar el plan de suscripción');
-    } finally {
-      setIsUpdatingPlan(false);
-    }
-  };
+  }, []);
 
   const handleLogout = async () => {
     document.cookie = 'dtk_role=; path=/; max-age=0';
@@ -366,523 +158,910 @@ export default function SuperAdminClient({
     window.location.href = '/login';
   };
 
+  // Enriquecer comercios con suscripción más reciente, comprobantes SaaS y métricas agregadas
+  const enrichedMerchants: EnrichedMerchant[] = useMemo(() => {
+    const metricsMap = new Map(metricsList.map((m) => [m.tenantId, m]));
+    return tenants.map((tenant) => {
+      const sub = subscriptions.find((s) => (s.tenant_id || s.restaurant_id) === tenant.id) ?? null;
+      const tenantTxs = transactions.filter((tx) => tx.tenant_id === tenant.id);
+      const lastTx = tenantTxs[0] ?? null;
+      const snapshot = getSubscriptionSnapshot(sub, lastTx, new Date(), {
+        isSuspended: Boolean(tenant.is_suspended),
+        suspendedReason: tenant.suspended_reason ?? null,
+      });
+      const metrics = metricsMap.get(tenant.id) ?? {
+        tenantId: tenant.id,
+        activeDrivers: 0,
+        totalAccounts: 0,
+        ownerEmail: null,
+      };
+      return {
+        tenant,
+        subscription: sub,
+        lastTransaction: lastTx,
+        transactions: tenantTxs,
+        snapshot,
+        metrics,
+      };
+    });
+  }, [tenants, subscriptions, transactions, metricsList]);
+
+  const tenantNameById = useMemo(
+    () => new Map(tenants.map((t) => [t.id, t.name])),
+    [tenants]
+  );
+
+  // KPIs estrictamente de gobernanza SaaS (sin orders.total_amount)
+  const kpis = useMemo(() => {
+    const totalMerchants = enrichedMerchants.length;
+    const activeMerchants = enrichedMerchants.filter((m) =>
+      ['ACTIVE', 'TRIAL', 'GRACE'].includes(m.snapshot.status)
+    ).length;
+    const suspendedMerchants = enrichedMerchants.filter(
+      (m) => m.snapshot.status === 'SUSPENDED'
+    ).length;
+    const expiredMerchants = enrichedMerchants.filter(
+      (m) => m.snapshot.status === 'EXPIRED' || m.snapshot.status === 'NONE'
+    );
+    const expiringSoonMerchants = enrichedMerchants.filter(
+      (m) =>
+        ['ACTIVE', 'TRIAL', 'GRACE'].includes(m.snapshot.status) &&
+        m.snapshot.daysRemaining <= 5
+    );
+
+    // Ingresos SaaS del mes actual (desde billing_transactions de Delivery Tracker)
+    const now = new Date();
+    const monthRevenuePen = transactions
+      .filter((tx) => {
+        const d = new Date(tx.created_at);
+        return (
+          tx.status === 'PAID' &&
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth()
+        );
+      })
+      .reduce((acc, tx) => acc + Number(tx.amount_pen || 0), 0);
+
+    // MRR estimado por planes activos
+    const estimatedMrr = enrichedMerchants
+      .filter((m) => m.snapshot.status === 'ACTIVE')
+      .reduce((acc, m) => acc + m.snapshot.price, 0);
+
+    const totalAccounts = metricsList.reduce((acc, m) => acc + m.totalAccounts, 0);
+    const totalActiveDrivers = metricsList.reduce((acc, m) => acc + m.activeDrivers, 0);
+
+    return {
+      totalMerchants,
+      activeMerchants,
+      suspendedMerchants,
+      expiredMerchants,
+      expiringSoonMerchants,
+      atRiskCount: expiredMerchants.length + expiringSoonMerchants.length,
+      monthRevenuePen,
+      estimatedMrr,
+      totalAccounts,
+      totalActiveDrivers,
+    };
+  }, [enrichedMerchants, transactions, metricsList]);
+
+  // Comercios ordenados por urgencia de suscripción (vencidos hace más tiempo primero)
+  const urgentMerchants = useMemo(() => {
+    const priority = (m: EnrichedMerchant) => {
+      if (m.snapshot.status === 'EXPIRED') return 0;
+      if (m.snapshot.status === 'NONE') return 1;
+      if (m.snapshot.status === 'GRACE') return 2;
+      if (['ACTIVE', 'TRIAL'].includes(m.snapshot.status) && m.snapshot.daysRemaining <= 5) return 3;
+      if (m.snapshot.status === 'SUSPENDED') return 4;
+      return 5;
+    };
+
+    return [...enrichedMerchants].sort((a, b) => {
+      const diff = priority(a) - priority(b);
+      if (diff !== 0) return diff;
+      if (a.snapshot.daysOverdue !== b.snapshot.daysOverdue) {
+        return b.snapshot.daysOverdue - a.snapshot.daysOverdue;
+      }
+      return a.snapshot.daysRemaining - b.snapshot.daysRemaining;
+    });
+  }, [enrichedMerchants]);
+
+  const filteredMerchants = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return enrichedMerchants.filter((m) => {
+      if (statusFilter !== 'ALL' && m.snapshot.status !== statusFilter) return false;
+      if (planFilter !== 'ALL' && m.snapshot.plan !== planFilter) return false;
+      if (q) {
+        const matchName = m.tenant.name.toLowerCase().includes(q);
+        const matchSlug = m.tenant.slug.toLowerCase().includes(q);
+        const matchRuc = (m.tenant.ruc || '').toLowerCase().includes(q);
+        const matchEmail = (m.metrics.ownerEmail || '').toLowerCase().includes(q);
+        if (!matchName && !matchSlug && !matchRuc && !matchEmail) return false;
+      }
+      return true;
+    });
+  }, [enrichedMerchants, searchTerm, statusFilter, planFilter]);
+
+  const paginatedMerchants = useMemo(() => {
+    const start = (merchantsPage - 1) * merchantsPageSize;
+    return filteredMerchants.slice(start, start + merchantsPageSize);
+  }, [filteredMerchants, merchantsPage, merchantsPageSize]);
+
+  const paginatedSubscriptions = useMemo(() => {
+    const start = (subsPage - 1) * subsPageSize;
+    return urgentMerchants.slice(start, start + subsPageSize);
+  }, [urgentMerchants, subsPage, subsPageSize]);
+
+  const paginatedNotifications = useMemo(() => {
+    const start = (notifsPage - 1) * notifsPageSize;
+    return notifications.slice(start, start + notifsPageSize);
+  }, [notifications, notifsPage, notifsPageSize]);
+
+  const attentionMerchants = useMemo(
+    () => urgentMerchants.filter((m) => m.snapshot.status !== 'ACTIVE' || m.snapshot.daysRemaining <= 5),
+    [urgentMerchants]
+  );
+
+  const selectedMerchant = useMemo(
+    () => enrichedMerchants.find((m) => m.tenant.id === selectedTenantId) ?? null,
+    [enrichedMerchants, selectedTenantId]
+  );
+
+  const handleNotifyAllExpired = async () => {
+    const targetIds = kpis.expiredMerchants.map((m) => m.tenant.id);
+    if (targetIds.length === 0) {
+      toast.info('No hay comercios con suscripción vencida para notificar.');
+      return;
+    }
+
+    setSendingBulk(true);
+    try {
+      const res = await fetch('/api/superadmin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantIds: targetIds,
+          type: 'SUBSCRIPTION_EXPIRED',
+          severity: 'URGENT',
+          title: 'Recordatorio: tu suscripción está vencida',
+          message:
+            'Tu panel opera en modo solo lectura. Renueva tu plan desde Suscripción y Facturación para reactivar tus despachos.',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudieron enviar las notificaciones.');
+
+      setNotifications((prev) => [
+        ...((data.notifications ?? []) as TenantNotification[]),
+        ...prev,
+      ]);
+      toast.success(`Aviso enviado en tiempo real a ${data.sentCount} comercio(s) vencido(s).`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al enviar notificaciones masivas.');
+    } finally {
+      setSendingBulk(false);
+    }
+  };
+
+  const renderCycleLabel = (snapshot: SubscriptionSnapshot) => {
+    if (snapshot.status === 'SUSPENDED') {
+      return <span className="text-xs font-semibold text-slate-600">Cuenta bloqueada</span>;
+    }
+    if (snapshot.status === 'GRACE') {
+      return (
+        <span className="text-xs font-semibold text-amber-700 tabular-nums">
+          Prórroga · {snapshot.daysRemaining}d (hasta {snapshot.graceUntilLabel})
+        </span>
+      );
+    }
+    if (snapshot.status === 'EXPIRED') {
+      return (
+        <span className="text-xs font-semibold text-rose-600 tabular-nums">
+          Venció hace {snapshot.daysOverdue}d ({snapshot.renewalDateLabel})
+        </span>
+      );
+    }
+    if (snapshot.status === 'NONE') {
+      return <span className="text-xs text-slate-400">Sin suscripción</span>;
+    }
+    return (
+      <span className={`text-xs tabular-nums ${snapshot.daysRemaining <= 5 ? 'font-bold text-amber-700' : 'text-slate-600'}`}>
+        Quedan {snapshot.daysRemaining}d · {snapshot.renewalDateLabel}
+      </span>
+    );
+  };
+
+  const headerMeta = TAB_HEADER[activeTab];
+
   return (
-    <div className="min-h-screen flex flex-col justify-between" style={{ backgroundColor: '#F1F5F9', fontFamily: 'Inter, sans-serif' }}>
+    <div className="flex h-screen overflow-hidden bg-slate-50" style={{ fontFamily: 'Inter, sans-serif' }}>
+      {/* Sidebar Obsidian colapsable */}
+      <SuperAdminSidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        totalMerchants={kpis.totalMerchants}
+        atRiskCount={kpis.atRiskCount}
+        notificationsCount={notifications.length}
+        userEmail={userEmail}
+        onLogout={handleLogout}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapse={handleToggleCollapse}
+      />
 
-      {/* Top Navbar en Índigo SaaS */}
-      <header
-        className="px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-md text-white"
-        style={{ backgroundColor: 'var(--saas-900, #312E81)' }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md flex-shrink-0"
-            style={{ backgroundColor: 'var(--saas-600, #4F46E5)' }}
-          >
-            <ShieldCheck size={22} color="white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold tracking-wide">Delivery Tracker</h1>
-              <span className="text-[10px] font-black uppercase bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
-                SuperAdmin
-              </span>
-            </div>
-            <p className="text-xs text-indigo-200">Consola de Gestión de Clientes, Suscripciones &amp; Plataforma</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn btn-indigo text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
-            id="btn-register-merchant"
-          >
-            <Plus size={15} />
-            <span>Registrar Comercio</span>
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="p-2 rounded-xl text-indigo-200 hover:text-white hover:bg-indigo-800/60 transition-colors"
-            title="Cerrar Sesión"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-6xl mx-auto w-full px-4 py-8 flex-1 space-y-6">
-
-        {/* Global KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Comercios Activos</p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
-                {restaurants.filter(r => r.is_open).length}{' '}
-                <span className="text-sm font-semibold text-slate-400">/ {restaurants.length}</span>
+      {/* Área principal */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+        {/* Topbar limpio */}
+        <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between gap-3 shrink-0 z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 shrink-0"
+              aria-label="Abrir navegación"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">
+                {headerMeta.title}
+              </h2>
+              <p className="hidden sm:block text-[11px] text-slate-500 truncate">
+                {headerMeta.subtitle}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-              <Store size={22} />
-            </div>
           </div>
 
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Despachos Entregados</p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-1">{totalDelivered}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-              <TrendingUp size={22} />
-            </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <span className="hidden lg:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+              <Lock size={12} className="text-emerald-600" />
+              Datos internos de comercios protegidos
+            </span>
+
+            <button
+              type="button"
+              id="btn-register-merchant"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            >
+              <Plus size={15} />
+              <span className="hidden sm:inline">Registrar Comercio</span>
+              <span className="sm:hidden">Nuevo</span>
+            </button>
           </div>
+        </header>
 
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Volumen Procesado</p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">S/ {totalVolume.toFixed(2)}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-              <CreditCard size={22} />
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 gap-6">
-          <button
-            onClick={() => setActiveTab('merchants')}
-            className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'merchants'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Store size={16} />
-            <span>Comercios Registrados ({restaurants.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('subscriptions')}
-            className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'subscriptions'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <CreditCard size={16} />
-            <span>Planes &amp; Suscripciones</span>
-          </button>
-        </div>
-
-        {/* TAB 1: COMERCIOS */}
-        {activeTab === 'merchants' && (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-sm text-slate-800 uppercase tracking-wider">
-                Directorio de Comercios
-              </h3>
-              <span className="text-xs text-slate-500">
-                Cada comercio opera con su consola de despacho y estación de empaque independiente.
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-100">
-                  <tr>
-                    <th className="py-3.5 px-4 font-bold">Comercio</th>
-                    <th className="py-3.5 px-4 font-bold">Identificador</th>
-                    <th className="py-3.5 px-4 font-bold">Dirección Central &bull; Cobertura</th>
-                    <th className="py-3.5 px-4 font-bold">Plan</th>
-                    <th className="py-3.5 px-4 font-bold">Cuota de Envíos</th>
-                    <th className="py-3.5 px-4 font-bold">Servicio</th>
-                    <th className="py-3.5 px-4 font-bold text-right">Configuración</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {restaurants.map(merchant => {
-                    const merchantOrders = orders.filter(o => (o.tenant_id || o.restaurant_id) === merchant.id);
-                    const sub = subscriptions.find(s => (s.tenant_id || s.restaurant_id) === merchant.id);
-                    const planConfig = sub ? PLAN_LIMITS[sub.plan] : PLAN_LIMITS['GROWTH'];
-
-                    return (
-                      <tr key={merchant.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-4 px-4 font-bold text-slate-900">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                              <Store size={16} />
-                            </div>
-                            <div>
-                              <p className="font-extrabold text-sm text-slate-900">{merchant.name}</p>
-                              <span className="text-[10px] text-slate-400 font-mono">ID: {merchant.id.substring(0, 8)}...</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 font-mono text-indigo-600 font-bold">
-                          {merchant.slug}
-                        </td>
-                        <td className="py-4 px-4 text-slate-600 max-w-[220px]">
-                          <p className="truncate font-medium text-slate-900">{merchant.address || 'Lima, Perú'}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
-                              Radio: {merchant.max_delivery_radius_km || 10} km
-                            </span>
-                            {merchant.lat != null && merchant.lng != null && (
-                              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                                GPS
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
-                            {planConfig.label} &bull; S/ {planConfig.price}/m
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold">{merchantOrders.length}</span>
-                            <span className="text-slate-400 text-[11px]">/ {planConfig.maxOrders >= 99999 ? 'Ilimitado' : `${planConfig.maxOrders} mes`}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <button
-                            onClick={() => handleToggleMerchantStatus(merchant)}
-                            disabled={updatingId === merchant.id}
-                            title={merchant.is_open ? 'Suspender comercio' : 'Activar comercio'}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                              merchant.is_open
-                                ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                            }`}
-                          >
-                            {merchant.is_open ? 'Suspender' : 'Activar'}
-                          </button>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedMerchantForPlan(merchant);
-                              setSelectedPlanKey(sub?.plan || 'GROWTH');
-                              setShowPlanModal(true);
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-bold text-[11px] border border-slate-200 hover:border-indigo-200 transition-all cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <CreditCard size={12} />
-                            <span>Modificar Plan</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+        {/* Aviso si falta aplicar migración 013 */}
+        {!notificationsReady && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 sm:px-6 py-2 text-xs text-amber-900 flex items-center gap-2 shrink-0">
+            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+            <span>
+              Ejecuta <code className="font-mono font-bold">supabase/migrations/014_superadmin_governance_and_notifications.sql</code> en Supabase para habilitar notificaciones en tiempo real, prórrogas y suspensión de plataforma.
+            </span>
           </div>
         )}
 
-        {/* TAB 2: SUSCRIPCIONES */}
-        {activeTab === 'subscriptions' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Object.entries(PLAN_LIMITS).map(([planKey, plan]) => (
-              <div key={planKey} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 relative">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-base text-slate-900">{plan.label}</h4>
-                  <span className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                    S/ {plan.price}/mes
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Cuota mensual:</span>
-                    <span className="font-bold text-slate-900">{plan.maxOrders} pedidos/mes</span>
+        {/* Contenido por pestaña */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 animate-fade-in">
+          {/* ================= TAB 1: RESUMEN DE PLATAFORMA ================= */}
+          {activeTab === 'overview' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
+                    <Store size={19} />
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Motorizados máx:</span>
-                    <span className="font-bold text-slate-900">{plan.maxDrivers} repartidores</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">API B2B Plug &amp; Play:</span>
-                    <span className="font-bold text-emerald-600">Incluido</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">PIN Anti-Fraude:</span>
-                    <span className="font-bold text-emerald-600">Incluido</span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Comercios Activos
+                    </p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5 tabular-nums">
+                      {kpis.activeMerchants}
+                      <span className="text-sm font-semibold text-slate-400"> / {kpis.totalMerchants}</span>
+                    </p>
+                    {kpis.suspendedMerchants > 0 && (
+                      <p className="text-[11px] text-rose-600 font-medium mt-0.5">
+                        {kpis.suspendedMerchants} suspendido(s)
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="pt-2 text-slate-400 text-[11px]">
-                  Comercios suscritos: <strong className="text-slate-700">{subscriptions.filter(s => s.plan === planKey).length}</strong>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-      </main>
-
-      {/* MODAL: REGISTRAR NUEVO COMERCIO CON MAPA INTERACTIVO */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 sm:p-7 space-y-5 my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <Store size={18} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">Registrar Nuevo Comercio</h3>
-                  <p className="text-xs text-slate-500">Configuración de sede central, telemetría y radio de cobertura</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateMerchant} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="form-group">
-                  <label className="form-label text-slate-700 font-bold">Nombre Comercial</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="ej. Farmacia San Lucas"
-                    value={newMerchantName}
-                    onChange={(e) => {
-                      setNewMerchantName(e.target.value);
-                      if (!newMerchantSlug || newMerchantSlug === newMerchantName.toLowerCase().replace(/[^a-z0-9]/g, '-')) {
-                        setNewMerchantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'));
-                      }
-                    }}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label text-slate-700 font-bold">Slug URL / Identificador</label>
-                  <input
-                    type="text"
-                    className="form-input font-mono"
-                    placeholder="farmacia-san-lucas"
-                    value={newMerchantSlug}
-                    onChange={(e) => setNewMerchantSlug(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label text-slate-700 font-bold">Plan de Suscripción</label>
-                <select
-                  value={newMerchantPlan}
-                  onChange={(e) => setNewMerchantPlan(e.target.value as 'STARTER' | 'GROWTH' | 'ENTERPRISE')}
-                  className="form-input font-bold text-indigo-700"
-                >
-                  <option value="STARTER">Starter (500 envíos/mes &bull; 2 repartidores &bull; S/ 149)</option>
-                  <option value="GROWTH">Growth (2,000 envíos/mes &bull; 8 repartidores &bull; S/ 299)</option>
-                  <option value="ENTERPRISE">Enterprise (Ilimitado &bull; 25 repartidores &bull; S/ 599)</option>
-                </select>
-              </div>
-
-              {/* DIRECCIÓN Y GEOCODIFICACIÓN */}
-              <div className="form-group">
-                <label className="form-label text-slate-700 font-bold flex justify-between items-center">
-                  <span>Dirección Central de Despacho (Hub / Sede)</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Mover pin en el mapa fija las coordenadas</span>
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <MapPin size={15} className="absolute left-3 top-3 text-slate-400" />
-                    <input
-                      type="text"
-                      className="form-input form-input-icon"
-                      placeholder="ej. Av. Benavides 1240, Miraflores, Lima"
-                      value={newMerchantAddress}
-                      onChange={(e) => setNewMerchantAddress(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleGeocodeAddress();
-                        }
-                      }}
-                      required
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleGeocodeAddress}
-                    disabled={isGeocoding}
-                    className="btn btn-indigo text-xs px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 shrink-0"
-                    title="Buscar dirección en el mapa"
-                  >
-                    {isGeocoding ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-                    <span>Ubicar</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* MAPA INTERACTIVO LEAFLET */}
-              <div className="space-y-1.5">
-                <label className="form-label text-slate-700 font-bold">
-                  Punto Central de Despacho en Mapa
-                </label>
-
-                <div
-                  id="merchant-map-picker"
-                  className="w-full h-48 sm:h-52 rounded-2xl border border-slate-300 shadow-inner overflow-hidden relative z-10"
-                />
-              </div>
-
-              {/* RADIO DE COBERTURA SLIDER & INPUT */}
-              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <label className="font-bold text-slate-700">Radio Máximo de Cobertura Delivery</label>
-                  <span className="font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                    {newMerchantRadius} Kilómetros
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="35"
-                  step="0.5"
-                  value={newMerchantRadius}
-                  onChange={(e) => setNewMerchantRadius(e.target.value)}
-                  className="w-full accent-indigo-600 cursor-pointer"
-                />
-                <p className="text-[10px] text-slate-500">
-                  Las órdenes fuera del círculo azul serán rechazadas por la API con estado 422 (Fuera de Cobertura).
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-100 transition-colors"
+                  onClick={() => setActiveTab('subscriptions')}
+                  className="bg-white rounded-2xl border border-slate-200/80 hover:border-rose-300 shadow-2xs p-4 flex items-center gap-3.5 text-left transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                    <AlertTriangle size={19} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Suscripciones en Riesgo
+                    </p>
+                    <p className="text-2xl font-extrabold text-rose-600 leading-tight mt-0.5 tabular-nums">
+                      {kpis.atRiskCount}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+                      {kpis.expiredMerchants.length} vencidas · {kpis.expiringSoonMerchants.length} por vencer
+                    </p>
+                  </div>
                 </button>
-                <button
-                  type="submit"
-                  disabled={isCreating}
-                  className="btn btn-indigo text-xs px-5 py-2.5 rounded-xl font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      <span>Registrando y Configurando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={14} />
-                      <span>Crear y Activar Comercio</span>
-                    </>
+
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <Wallet size={19} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Ingresos SaaS (Mes)
+                    </p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5 tabular-nums">
+                      {formatPen(kpis.monthRevenuePen)}
+                    </p>
+                    <p className="text-[11px] text-emerald-700 font-medium mt-0.5 tabular-nums">
+                      MRR activo: {formatPen(kpis.estimatedMrr)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <Users size={19} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Capacidad Registrada
+                    </p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5 tabular-nums">
+                      {kpis.totalAccounts}
+                      <span className="text-xs font-semibold text-slate-400"> cuentas</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+                      {kpis.totalActiveDrivers} repartidores activos
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque de atención inmediata */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Comercios que Requieren Atención
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Priorizados por días de vencimiento, prórrogas activas o renovación próxima (≤5 días)
+                    </p>
+                  </div>
+                  {kpis.expiredMerchants.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleNotifyAllExpired}
+                      disabled={sendingBulk}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {sendingBulk ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                      Notificar a todos los vencidos ({kpis.expiredMerchants.length})
+                    </button>
                   )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                </div>
 
-      {/* MODAL: MODIFICAR PLAN DE SUSCRIPCIÓN */}
-      {showPlanModal && selectedMerchantForPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 sm:p-7 space-y-5">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <CreditCard size={18} />
+                {attentionMerchants.length === 0 ? (
+                  <div className="py-12 px-4 text-center">
+                    <CheckCircle2 size={30} className="mx-auto text-emerald-500 mb-2" />
+                    <p className="text-sm font-semibold text-slate-800">
+                      Todas las suscripciones están saludables
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      No hay cuentas vencidas, suspendidas ni próximas a vencer.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="divide-y divide-slate-100">
+                      {attentionMerchants.slice(0, 6).map((m) => {
+                        const badge = STATUS_BADGE[m.snapshot.status];
+                        return (
+                          <div
+                            key={m.tenant.id}
+                            className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                                <Store size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-bold text-slate-900 truncate">{m.tenant.name}</p>
+                                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${badge.className}`}>
+                                    {badge.label}
+                                  </span>
+                                  <span className="text-[11px] font-medium text-slate-500">
+                                    Plan {m.snapshot.planLabel}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                                  {renderCycleLabel(m.snapshot)}
+                                  <span>·</span>
+                                  <span className="tabular-nums">
+                                    {m.metrics.totalAccounts} cuentas · {m.metrics.activeDrivers} repartidores
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTenantId(m.tenant.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                              >
+                                <SlidersHorizontal size={13} />
+                                Gestionar
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {attentionMerchants.length > 6 && (
+                      <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/60 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('subscriptions')}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950 cursor-pointer"
+                        >
+                          Ver los {attentionMerchants.length} comercios en Suscripciones
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ================= TAB 2: MÉTRICAS DE PLATAFORMA ================= */}
+          {activeTab === 'metrics' && (
+            <SuperAdminMetricsView
+              merchants={enrichedMerchants.map((m) => ({
+                tenant: m.tenant,
+                snapshot: m.snapshot,
+                activeDrivers: m.metrics.activeDrivers,
+                totalAccounts: m.metrics.totalAccounts,
+              }))}
+              transactions={transactions}
+            />
+          )}
+
+          {/* ================= TAB 2: DIRECTORIO DE COMERCIOS ================= */}
+          {activeTab === 'merchants' && (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+              {/* Barra de búsqueda y filtros */}
+              <div className="p-4 border-b border-slate-200/80 bg-slate-50/60 flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setMerchantsPage(1);
+                    }}
+                    placeholder="Buscar por nombre, slug, RUC o correo del propietario..."
+                    className="w-full h-9 pl-9 pr-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+                  />
                 </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">Modificar Plan de Suscripción</h3>
-                  <p className="text-xs text-slate-500">{selectedMerchantForPlan.name}</p>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value as 'ALL' | SubscriptionStatus);
+                      setMerchantsPage(1);
+                    }}
+                    className="h-9 bg-white border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">Estado: Todos</option>
+                    <option value="ACTIVE">Activos</option>
+                    <option value="TRIAL">Prueba 14d</option>
+                    <option value="GRACE">En prórroga</option>
+                    <option value="EXPIRED">Vencidos</option>
+                    <option value="SUSPENDED">Suspendidos</option>
+                  </select>
+
+                  <select
+                    value={planFilter}
+                    onChange={(e) => {
+                      setPlanFilter(e.target.value as 'ALL' | PlanType);
+                      setMerchantsPage(1);
+                    }}
+                    className="h-9 bg-white border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">Plan: Todos</option>
+                    {PAID_PLANS.map((p) => (
+                      <option key={p} value={p}>
+                        {PLAN_CATALOG[p].label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-              <button
-                onClick={() => setShowPlanModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X size={18} />
-              </button>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-200/80">
+                    <tr>
+                      <th className="py-3 px-4 font-semibold">Comercio</th>
+                      <th className="py-3 px-4 font-semibold">Plan y Estado</th>
+                      <th className="py-3 px-4 font-semibold">Vigencia / Ciclo</th>
+                      <th className="py-3 px-4 font-semibold">Cuota del Mes</th>
+                      <th className="py-3 px-4 font-semibold">Cuentas y Flota</th>
+                      <th className="py-3 px-4 font-semibold text-right">Gobernanza</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredMerchants.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          No se encontraron comercios con los filtros seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedMerchants.map((m) => {
+                        const badge = STATUS_BADGE[m.snapshot.status];
+                        const pct = Math.min(100, Math.round(m.snapshot.usagePercent));
+                        return (
+                          <tr
+                            key={m.tenant.id}
+                            onClick={() => setSelectedTenantId(m.tenant.id)}
+                            className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                          >
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                                  <Store size={15} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-900 text-sm truncate">{m.tenant.name}</p>
+                                  <p className="text-[11px] font-mono text-slate-400 truncate">
+                                    {m.tenant.slug} {m.tenant.ruc ? `· ${m.tenant.ruc}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-800">{m.snapshot.planLabel}</span>
+                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${badge.className}`}>
+                                  {badge.label}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                                {formatPen(m.snapshot.price)}/mes
+                              </p>
+                            </td>
+                            <td className="py-3.5 px-4">{renderCycleLabel(m.snapshot)}</td>
+                            <td className="py-3.5 px-4 min-w-[140px]">
+                              <div className="flex items-center justify-between text-[11px] tabular-nums mb-1">
+                                <span className="font-bold text-slate-800">{m.snapshot.ordersThisMonth}</span>
+                                <span className="text-slate-400">/ {m.snapshot.maxOrders}</span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${pct}%`,
+                                    backgroundColor:
+                                      m.snapshot.quotaState === 'exhausted'
+                                        ? '#E11D48'
+                                        : m.snapshot.quotaState === 'warning'
+                                          ? '#D97706'
+                                          : '#10B981',
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 tabular-nums">
+                              <p className="font-semibold text-slate-800">{m.metrics.totalAccounts} cuentas</p>
+                              <p className="text-[11px] text-slate-500">
+                                {m.metrics.activeDrivers} / {m.snapshot.maxDrivers} repartidores
+                              </p>
+                            </td>
+                            <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTenantId(m.tenant.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                              >
+                                <SlidersHorizontal size={12} />
+                                Gestionar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredMerchants.length > 0 && (
+                <TablePagination
+                  totalItems={filteredMerchants.length}
+                  currentPage={merchantsPage}
+                  pageSize={merchantsPageSize}
+                  onPageChange={setMerchantsPage}
+                  onPageSizeChange={setMerchantsPageSize}
+                  itemLabel="comercios"
+                />
+              )}
             </div>
+          )}
 
-            <form onSubmit={handleUpdatePlan} className="space-y-4 text-xs">
-              <div className="space-y-2">
-                <label className="font-bold text-slate-700">Seleccione el nuevo plan comercial:</label>
-                {Object.entries(PLAN_LIMITS).map(([key, plan]) => {
-                  const isSelected = selectedPlanKey === key;
+          {/* ================= TAB 3: SUSCRIPCIONES Y PLANES ================= */}
+          {activeTab === 'subscriptions' && (
+            <div className="space-y-5">
+              {/* Tarjetas de catálogo comercial desde PLAN_CATALOG */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {PAID_PLANS.map((planKey) => {
+                  const plan = PLAN_CATALOG[planKey];
+                  const subsInPlan = enrichedMerchants.filter((m) => m.snapshot.plan === planKey);
+                  const activeInPlan = subsInPlan.filter((m) => m.snapshot.status === 'ACTIVE').length;
                   return (
                     <div
-                      key={key}
-                      onClick={() => setSelectedPlanKey(key as 'STARTER' | 'GROWTH' | 'ENTERPRISE')}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/60 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
+                      key={planKey}
+                      className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-3"
                     >
-                      <div className="space-y-0.5">
-                        <p className={`font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>{plan.label}</p>
-                        <p className="text-[11px] text-slate-500">
-                          {plan.maxOrders >= 99999 ? 'Envíos ilimitados' : `${plan.maxOrders} envíos/mes`} &bull; {plan.maxDrivers} repartidores
-                        </p>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-base text-slate-900">{plan.label}</h4>
+                        <span className="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-full tabular-nums">
+                          {formatPen(plan.price)}/mes
+                        </span>
                       </div>
-                      <span className={`font-black text-xs px-2.5 py-1 rounded-full ${
-                        isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        S/ {plan.price}/mes
-                      </span>
+                      <div className="space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3 tabular-nums">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Cuota mensual</span>
+                          <span className="font-semibold text-slate-900">
+                            {plan.maxOrders.toLocaleString('es-PE')} pedidos/mes
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Flota máxima</span>
+                          <span className="font-semibold text-slate-900">{plan.maxDrivers} repartidores</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs tabular-nums">
+                        <span className="text-slate-500">
+                          Comercios: <strong className="text-slate-900">{subsInPlan.length}</strong> ({activeInPlan} activos)
+                        </span>
+                        <span className="font-bold text-emerald-700">
+                          {formatPen(activeInPlan * plan.price)}/mes
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPlanModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-100 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingPlan}
-                  className="btn btn-indigo text-xs px-4 py-2.5 rounded-xl font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
-                >
-                  {isUpdatingPlan ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      <span>Actualizando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={14} />
-                      <span>Guardar Nuevo Plan</span>
-                    </>
+              {/* Tabla de control de vencimientos */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Control de Vencimientos y Cobranza</h3>
+                    <p className="text-xs text-slate-500">
+                      Ordenado por urgencia: cuentas vencidas hace más días aparecen primero
+                    </p>
+                  </div>
+                  {kpis.expiredMerchants.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleNotifyAllExpired}
+                      disabled={sendingBulk}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                    >
+                      {sendingBulk ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
+                      Notificar vencidos ({kpis.expiredMerchants.length})
+                    </button>
                   )}
-                </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-200/80">
+                      <tr>
+                        <th className="py-3 px-4 font-semibold">Comercio</th>
+                        <th className="py-3 px-4 font-semibold">Plan</th>
+                        <th className="py-3 px-4 font-semibold">Estado</th>
+                        <th className="py-3 px-4 font-semibold">Inicio Ciclo</th>
+                        <th className="py-3 px-4 font-semibold">Vencimiento / Prórroga</th>
+                        <th className="py-3 px-4 font-semibold text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {paginatedSubscriptions.map((m) => {
+                        const badge = STATUS_BADGE[m.snapshot.status];
+                        return (
+                          <tr key={m.tenant.id} className="hover:bg-slate-50/70">
+                            <td className="py-3.5 px-4 font-bold text-slate-900">
+                              {m.tenant.name}
+                              <span className="block text-[11px] font-normal text-slate-400">
+                                {m.metrics.ownerEmail || m.tenant.slug}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-semibold text-slate-700 tabular-nums">
+                              {m.snapshot.planLabel} ({formatPen(m.snapshot.price)})
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${badge.className}`}>
+                                {badge.label}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-500 tabular-nums">
+                              {formatDatePen(m.snapshot.billingCycleStart)}
+                            </td>
+                            <td className="py-3.5 px-4">{renderCycleLabel(m.snapshot)}</td>
+                            <td className="py-3.5 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTenantId(m.tenant.id)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                              >
+                                <Clock size={12} />
+                                Prórroga / Avisar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {urgentMerchants.length > 0 && (
+                  <TablePagination
+                    totalItems={urgentMerchants.length}
+                    currentPage={subsPage}
+                    pageSize={subsPageSize}
+                    onPageChange={setSubsPage}
+                    onPageSizeChange={setSubsPageSize}
+                    itemLabel="suscripciones"
+                  />
+                )}
               </div>
-            </form>
-          </div>
+            </div>
+          )}
+
+          {/* ================= TAB 4: HISTORIAL DE NOTIFICACIONES ================= */}
+          {activeTab === 'notifications' && (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Bitácora de Notificaciones Enviadas
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Avisos enviados al panel administrativo de cada comercio vía Realtime
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-slate-500 tabular-nums">
+                  {notifications.length} registros
+                </span>
+              </div>
+
+              {notifications.length === 0 ? (
+                <div className="py-12 px-4 text-center">
+                  <Bell size={28} className="mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm font-semibold text-slate-700">Aún no se han enviado notificaciones</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Abre cualquier comercio y utiliza la sección &ldquo;Notificar al Admin del Comercio&rdquo;.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {paginatedNotifications.map((n) => (
+                    <div key={n.id} className="px-5 py-3.5 flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                            n.severity === 'URGENT'
+                              ? 'bg-rose-50 text-rose-600'
+                              : n.severity === 'WARNING'
+                                ? 'bg-amber-50 text-amber-600'
+                                : 'bg-indigo-50 text-indigo-600'
+                          }`}
+                        >
+                          {n.severity === 'URGENT' ? <ShieldAlert size={15} /> : <Bell size={15} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-slate-900">
+                              {tenantNameById.get(n.tenant_id) || 'Comercio'}
+                            </span>
+                            <span className="text-slate-300">·</span>
+                            <span className="text-xs font-semibold text-slate-700">{n.title}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-1">
+                        <span
+                          className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                            n.is_read
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}
+                        >
+                          {n.is_read ? 'Leída' : 'Pendiente'}
+                        </span>
+                        <p className="text-[10px] text-slate-400 tabular-nums">
+                          {formatDateTimePen(n.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {notifications.length > 0 && (
+                <TablePagination
+                  totalItems={notifications.length}
+                  currentPage={notifsPage}
+                  pageSize={notifsPageSize}
+                  onPageChange={setNotifsPage}
+                  onPageSizeChange={setNotifsPageSize}
+                  itemLabel="notificaciones"
+                />
+              )}
+            </div>
+          )}
         </div>
+      </main>
+
+      {/* Drawer lateral de gestión de comercio */}
+      {selectedMerchant && (
+        <MerchantGovernanceDrawer
+          tenant={selectedMerchant.tenant}
+          subscription={selectedMerchant.subscription}
+          snapshot={selectedMerchant.snapshot}
+          metrics={selectedMerchant.metrics}
+          transactions={selectedMerchant.transactions}
+          onClose={() => setSelectedTenantId(null)}
+          onTenantUpdated={(updated) =>
+            setTenants((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+          }
+          onSubscriptionUpdated={(updated) =>
+            setSubscriptions((prev) => {
+              const exists = prev.some((s) => s.id === updated.id);
+              return exists
+                ? prev.map((s) => (s.id === updated.id ? updated : s))
+                : [updated, ...prev];
+            })
+          }
+          onNotificationSent={(sent) =>
+            setNotifications((prev) => [...sent, ...prev])
+          }
+        />
       )}
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-400">
-        Delivery Tracker &bull; Plataforma de Despacho Logístico &bull; Módulo de SuperAdministración
-      </footer>
+      {/* Modal de Alta Presencial */}
+      <CreateMerchantModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={({ tenant, subscription, transaction, ownerEmail }) => {
+          setTenants((prev) => [tenant, ...prev]);
+          setSubscriptions((prev) => [subscription, ...prev]);
+          if (transaction) setTransactions((prev) => [transaction, ...prev]);
+          setMetricsList((prev) => [
+            { tenantId: tenant.id, activeDrivers: 0, totalAccounts: 1, ownerEmail },
+            ...prev,
+          ]);
+        }}
+      />
     </div>
   );
 }

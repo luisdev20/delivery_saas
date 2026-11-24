@@ -72,6 +72,9 @@ export interface Tenant {
   cover_image_url: string | null;
   brand_color: string;
   is_open?: boolean;
+  is_suspended?: boolean;
+  suspended_at?: string | null;
+  suspended_reason?: string | null;
   created_at: string;
 }
 
@@ -88,6 +91,29 @@ export interface Subscription {
   orders_this_month: number;
   billing_cycle_start: string;
   is_active: boolean;
+  grace_until?: string | null;
+  grace_reason?: string | null;
+  created_at: string;
+}
+
+export type TenantNotificationType =
+  | 'SUBSCRIPTION_EXPIRING'
+  | 'SUBSCRIPTION_EXPIRED'
+  | 'GRACE_GRANTED'
+  | 'ACCOUNT_STATUS'
+  | 'GENERAL';
+
+export type TenantNotificationSeverity = 'INFO' | 'WARNING' | 'URGENT';
+
+export interface TenantNotification {
+  id: string;
+  tenant_id: string;
+  type: TenantNotificationType;
+  severity: TenantNotificationSeverity;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_by: string | null;
   created_at: string;
 }
 

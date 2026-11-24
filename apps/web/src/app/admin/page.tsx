@@ -26,6 +26,10 @@ export default async function AdminHubPage({ searchParams }: Props) {
   // El rol y el comercio salen de la sesión real (no de cookies del cliente)
   const session = await getSessionContext();
 
+  if (session.role === 'superadmin') {
+    redirect('/superadmin');
+  }
+
   if (session.role === 'packing') {
     redirect(`/packing/${session.tenantSlug || 'fuego-carbon'}`);
   }
@@ -49,8 +53,8 @@ export default async function AdminHubPage({ searchParams }: Props) {
     .select('*')
     .order('created_at', { ascending: true });
 
-  // Si el usuario está asignado a un comercio específico y no es superadmin, redirigir directo a su slug
-  if (restaurantUser && restaurantUser.role !== 'superadmin' && restaurantUser.restaurant_id) {
+  // Si el usuario está asignado a un comercio específico, redirigir directo a su slug
+  if (restaurantUser && restaurantUser.restaurant_id) {
     const matched = restaurants?.find(r => r.id === restaurantUser.restaurant_id);
     if (matched?.slug) {
       redirect(`/admin/${matched.slug}`);

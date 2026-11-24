@@ -4,8 +4,8 @@ import type { Metadata } from 'next';
 import OnboardingClient from './OnboardingClient';
 
 export const metadata: Metadata = {
-  title: 'Onboarding — Nuevo Restaurante',
-  description: 'Alta de un nuevo restaurante en la plataforma Delivery Tracker SaaS.',
+  title: 'Onboarding — Nuevo Comercio',
+  description: 'Alta de un nuevo comercio en la plataforma Delivery Tracker DaaS.',
 };
 
 export default async function OnboardingPage() {
